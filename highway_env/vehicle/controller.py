@@ -1,11 +1,12 @@
 import copy
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional
 
 import numpy as np
+from torch import TYPE_CHECKING
 
 from highway_env import utils
 from highway_env.road.road import LaneIndex, Road, Route
-from highway_env.utils import Vector
+from highway_env.utils import ActionDict, Vector
 from highway_env.vehicle.kinematics import Vehicle
 
 
@@ -38,14 +39,15 @@ class ControlledVehicle(Vehicle):
         position: Vector,
         heading: float = 0,
         speed: float = 0,
-        target_lane_index: LaneIndex = None,
-        target_speed: float = None,
-        route: Route = None,
+        target_lane_index: LaneIndex | None = None,
+        target_speed: float | None = None,
+        route: Route | None = None,
     ):
         super().__init__(road, position, heading, speed)
-        self.target_lane_index = target_lane_index or self.lane_index
-        self.target_speed = target_speed or self.speed
-        self.route = route
+        self.target_lane_index: LaneIndex = target_lane_index or self.lane_index
+        self.target_speed:float = target_speed or self.speed
+        # We assert in runtime that route is not None.
+        self.route = route  # type: ignore
 
     @classmethod
     def create_from(cls, vehicle: "ControlledVehicle") -> "ControlledVehicle":
@@ -86,7 +88,7 @@ class ControlledVehicle(Vehicle):
             self.route = [self.lane_index]
         return self
 
-    def act(self, action: Union[dict, str] = None) -> None:
+    def act(self, action: ActionDict | str | None = None) -> None:
         """
         Perform a high-level action to change the desired lane or speed.
 
@@ -102,6 +104,11 @@ class ControlledVehicle(Vehicle):
             self.target_speed -= self.DELTA_SPEED
         elif action == "LANE_RIGHT":
             _from, _to, _id = self.target_lane_index
+
+            if TYPE_CHECKING:
+                # We assert in runtime that _id is not None.
+                assert _id is not None
+
             target_lane_index = (
                 _from,
                 _to,
@@ -113,6 +120,11 @@ class ControlledVehicle(Vehicle):
                 self.target_lane_index = target_lane_index
         elif action == "LANE_LEFT":
             _from, _to, _id = self.target_lane_index
+
+            if TYPE_CHECKING:
+                # We assert in runtime that _id is not None.
+                assert _id is not None
+
             target_lane_index = (
                 _from,
                 _to,
@@ -197,7 +209,7 @@ class ControlledVehicle(Vehicle):
         """
         return self.KP_A * (target_speed - self.speed)
 
-    def get_routes_at_intersection(self) -> List[Route]:
+    def get_routes_at_intersection(self) -> list[Route]:
         """Get the list of routes that can be followed at the next intersection."""
         if not self.route:
             return []
@@ -212,7 +224,7 @@ class ControlledVehicle(Vehicle):
             return [self.route]
         next_destinations_from = list(next_destinations.keys())
         routes = [
-            self.route[0 : index + 1]
+            self.route[0: index + 1]
             + [(self.route[index][1], destination, self.route[index][2])]
             for destination in next_destinations_from
         ]
@@ -235,7 +247,7 @@ class ControlledVehicle(Vehicle):
 
     def predict_trajectory_constant_speed(
         self, times: np.ndarray
-    ) -> Tuple[List[np.ndarray], List[float]]:
+    ) -> tuple[list[np.ndarray], list[float]]:
         """
         Predict the future positions of the vehicle along its planned route, under constant speed
 
@@ -244,13 +256,13 @@ class ControlledVehicle(Vehicle):
         """
         coordinates = self.lane.local_coordinates(self.position)
         route = self.route or [self.lane_index]
-        pos_heads = [
+        pos_heads: list[tuple[np.ndarray, float]] = [
             self.road.network.position_heading_along_route(
                 route, coordinates[0] + self.speed * t, 0, self.lane_index
             )
             for t in times
         ]
-        return tuple(zip(*pos_heads))
+        return tuple(zip(*pos_heads)) # type: ignore
 
 
 class MDPVehicle(ControlledVehicle):
@@ -292,7 +304,7 @@ class MDPVehicle(ControlledVehicle):
         self.speed_index = self.speed_to_index(self.target_speed)
         self.target_speed = self.index_to_speed(self.speed_index)
 
-    def act(self, action: Union[dict, str] = None) -> None:
+    def act(self, action: ActionDict | str | None = None) -> None:
         """
         Perform a high-level action.
 
@@ -335,13 +347,13 @@ class MDPVehicle(ControlledVehicle):
         x = (speed - self.target_speeds[0]) / (
             self.target_speeds[-1] - self.target_speeds[0]
         )
-        return np.int64(
+        return int(np.int64(
             np.clip(
                 np.round(x * (self.target_speeds.size - 1)),
                 0,
                 self.target_speeds.size - 1,
             )
-        )
+        ))
 
     @classmethod
     def speed_to_index_default(cls, speed: float) -> int:
@@ -356,13 +368,13 @@ class MDPVehicle(ControlledVehicle):
         x = (speed - cls.DEFAULT_TARGET_SPEEDS[0]) / (
             cls.DEFAULT_TARGET_SPEEDS[-1] - cls.DEFAULT_TARGET_SPEEDS[0]
         )
-        return np.int64(
+        return int(np.int64(
             np.clip(
                 np.round(x * (cls.DEFAULT_TARGET_SPEEDS.size - 1)),
                 0,
                 cls.DEFAULT_TARGET_SPEEDS.size - 1,
             )
-        )
+        ))
 
     @classmethod
     def get_speed_index(cls, vehicle: Vehicle) -> int:
@@ -372,11 +384,11 @@ class MDPVehicle(ControlledVehicle):
 
     def predict_trajectory(
         self,
-        actions: List,
+        actions: list[ActionDict | str | None],
         action_duration: float,
         trajectory_timestep: float,
         dt: float,
-    ) -> List[ControlledVehicle]:
+    ) -> list[ControlledVehicle]:
         """
         Predict the future trajectory of the vehicle given a sequence of actions.
 

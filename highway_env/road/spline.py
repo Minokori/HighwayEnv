@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Union
+
 import numpy as np
 from scipy import interpolate
 
@@ -23,16 +25,16 @@ class LinearSpline2D:
         )
         self.length = arc_length_cumulated[-1]
         self.x_curve = interpolate.interp1d(
-            arc_length_cumulated, x_values, fill_value="extrapolate"
+            arc_length_cumulated, x_values, fill_value="extrapolate"  # type: ignore
         )
         self.y_curve = interpolate.interp1d(
-            arc_length_cumulated, y_values, fill_value="extrapolate"
+            arc_length_cumulated, y_values, fill_value="extrapolate"  # type: ignore
         )
         self.dx_curve = interpolate.interp1d(
-            arc_length_cumulated, x_values_diff, fill_value="extrapolate"
+            arc_length_cumulated, x_values_diff, fill_value="extrapolate" # type: ignore
         )
         self.dy_curve = interpolate.interp1d(
-            arc_length_cumulated, y_values_diff, fill_value="extrapolate"
+            arc_length_cumulated, y_values_diff, fill_value="extrapolate"  # type: ignore
         )
 
         (self.s_samples, self.poses) = self.sample_curve(
@@ -45,9 +47,9 @@ class LinearSpline2D:
     def get_dx_dy(self, lon: float) -> tuple[float, float]:
         idx_pose = self._get_idx_segment_for_lon(lon)
         pose = self.poses[idx_pose]
-        return pose.normal
+        return pose.normal[0], pose.normal[1]
 
-    def cartesian_to_frenet(self, position: tuple[float, float]) -> tuple[float, float]:
+    def cartesian_to_frenet(self, position: Union[tuple[float, float], np.ndarray]) -> tuple[float, float]:
         """
         Transform the point in Cartesian coordinates into Frenet coordinates of the curve
         """
@@ -122,7 +124,7 @@ class CurvePose:
     """
 
     def __init__(self, x: float, y: float, dx: float, dy: float):
-        self.length = np.sqrt(dx**2 + dy**2)
+        self.length:float = np.sqrt(dx**2 + dy**2)
         self.position = np.array([x, y]).flatten()
         self.normal = np.array([dx, dy]).flatten() / self.length
         self.orthonormal = np.array([-self.normal[1], self.normal[0]]).flatten()
@@ -133,13 +135,13 @@ class CurvePose:
         """
         return np.sqrt(np.sum((self.position - point) ** 2))
 
-    def project_onto_normal(self, point: tuple[float, float]) -> float:
+    def project_onto_normal(self, point: Union[tuple[float, float], np.ndarray]) -> float:
         """
         Compute the longitudinal distance from pose origin to point by projecting the point onto the normal vector of the pose
         """
         return self.normal.dot(point - self.position)
 
-    def project_onto_orthonormal(self, point: tuple[float, float]) -> float:
+    def project_onto_orthonormal(self, point: Union[tuple[float, float], np.ndarray]) -> float:
         """
         Compute the lateral distance from pose origin to point by projecting the point onto the orthonormal vector of the pose
         """

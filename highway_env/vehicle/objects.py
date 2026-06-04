@@ -27,7 +27,7 @@ class RoadObject(ABC):
 
     def __init__(
         self,
-        road: Road,
+        road: Road | None,
         position: Sequence[float],
         heading: float = 0,
         speed: float = 0,
@@ -38,16 +38,19 @@ class RoadObject(ABC):
         :param heading: the angle from positive direction of horizontal axis
         :param speed: cartesian speed of object in the surface
         """
-        self.road = road
-        self.position = np.array(position, dtype=np.float64)
+        # We assert in runtime that road is not None.
+        self.road: Road = road  # type: ignore
+        self.position: np.ndarray = np.array(position, dtype=np.float64)
         self.heading = heading
-        self.speed = speed
+        self.speed: float = speed
+
         self.lane_index = (
             self.road.network.get_closest_lane_index(self.position, self.heading)
             if self.road
             else np.nan
         )
-        self.lane = self.road.network.get_lane(self.lane_index) if self.road else None
+        # assume if self.road is not None, then self.lane_index is not np.nan either, so we can safely get the lane;
+        self.lane = self.road.network.get_lane(self.lane_index) if self.road else None  # type: ignore
 
         # Enable collision with other collidables
         self.collidable = True
@@ -85,7 +88,7 @@ class RoadObject(ABC):
         if speed is None:
             speed = lane.speed_limit
         return cls(
-            road, lane.position(longitudinal, 0), lane.heading_at(longitudinal), speed
+            road, lane.position(longitudinal, 0), lane.heading_at(longitudinal), speed  # type: ignore
         )
 
     def handle_collisions(self, other: RoadObject, dt: float = 0) -> None:
@@ -118,7 +121,7 @@ class RoadObject(ABC):
             if not other.solid:
                 other.hit = True
 
-    def _is_colliding(self, other, dt):
+    def _is_colliding(self, other: RoadObject, dt: float) -> tuple[bool, bool, np.ndarray]:
         # Fast spherical pre-check
         if (
             np.linalg.norm(other.position - self.position)
@@ -134,7 +137,7 @@ class RoadObject(ABC):
         # Accurate rectangular check
         return utils.are_polygons_intersecting(
             self.polygon(), other.polygon(), self.velocity * dt, other.velocity * dt
-        )
+        )  # type: ignore
 
     # Just added for sake of compatibility
     def to_dict(self, origin_vehicle=None, observe_intentions=True):
@@ -179,7 +182,7 @@ class RoadObject(ABC):
         points = (rotation @ points).T + np.tile(self.position, (4, 1))
         return np.vstack([points, points[0:1]])
 
-    def lane_distance_to(self, other: RoadObject, lane: AbstractLane = None) -> float:
+    def lane_distance_to(self, other: RoadObject, lane: AbstractLane | None = None) -> float:
         """
         Compute the signed distance to another object along a lane.
 
@@ -191,6 +194,11 @@ class RoadObject(ABC):
             return np.nan
         if not lane:
             lane = self.lane
+
+        if TYPE_CHECKING:
+            # We assert in runtime that lane is not None.
+            assert lane is not None
+
         return (
             lane.local_coordinates(other.position)[0]
             - lane.local_coordinates(self.position)[0]
@@ -199,6 +207,9 @@ class RoadObject(ABC):
     @property
     def on_road(self) -> bool:
         """Is the object on its current lane, or off-road?"""
+        if TYPE_CHECKING:
+            # We assert in runtime that self.lane is not None.
+            assert self.lane is not None
         return self.lane.on_lane(self.position)
 
     def front_distance_to(self, other: RoadObject) -> float:

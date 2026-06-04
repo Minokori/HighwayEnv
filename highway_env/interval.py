@@ -183,13 +183,13 @@ class LPV:
         x0: Vector,
         a0: Matrix,
         da: list[Vector],
-        b: Matrix = None,
-        d: Matrix = None,
-        omega_i: Matrix = None,
-        u: Vector = None,
-        k: Matrix = None,
-        center: Vector = None,
-        x_i: Matrix = None,
+        b: Matrix|None = None,
+        d: Matrix|None = None,
+        omega_i: Matrix|None = None,
+        u: Vector|None = None,
+        k: Matrix|None = None,
+        center: Vector|None = None,
+        x_i: Matrix|None = None,
     ) -> None:
         """
         A Linear Parameter-Varying system:

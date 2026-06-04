@@ -10,7 +10,7 @@ from highway_env.utils import Vector
 from highway_env.vehicle.kinematics import Vehicle
 
 
-def rk4(func: Callable, state: np.ndarray, dt: float = 0.01, t: float = 0, **kwargs):
+def rk4(func: Callable[[float, np.ndarray], np.ndarray], state: np.ndarray, dt: float = 0.01, t: float = 0, **kwargs) -> np.ndarray:
     """
     single-step fourth-order numerical integration (RK4) method
     func: system of first order ODEs
@@ -46,7 +46,7 @@ class BicycleVehicle(Vehicle):
     MAX_ANGULAR_SPEED: float = 2 * np.pi  # [rad/s]
 
     def __init__(
-        self, road: Road, position: Vector, heading: float = 0, speed: float = 0
+        self, road: Road | None, position: Vector, heading: float = 0, speed: float = 0
     ) -> None:
         super().__init__(road, position, heading, speed)
         self.lateral_speed = 0
@@ -71,7 +71,7 @@ class BicycleVehicle(Vehicle):
     def derivative(self):
         return self.derivative_func(None, self.state)
 
-    def derivative_func(self, time: float, state: np.ndarray, **kwargs) -> np.ndarray:
+    def derivative_func(self, time: float | None, state: np.ndarray, **kwargs) -> np.ndarray:
         """
         See Chapter 2 of Lateral Vehicle Dynamics. Vehicle Dynamics and Control. Rajamani, R. (2011)
 
@@ -213,7 +213,7 @@ class BicycleVehicle(Vehicle):
         """
         A0, phi, B = self.lateral_lpv_structure()
         self.theta = np.array([self.FRICTION_FRONT, self.FRICTION_REAR])
-        A = A0 + np.tensordot(self.theta, phi, axes=[0, 0])
+        A = A0 + np.tensordot(self.theta, phi, axes=(0, 0))
         return A, B
 
     def full_lateral_lpv_structure(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -253,12 +253,12 @@ class BicycleVehicle(Vehicle):
         """
         A0, phi, B = self.full_lateral_lpv_structure()
         self.theta = [self.FRICTION_FRONT, self.FRICTION_REAR]
-        A = A0 + np.tensordot(self.theta, phi, axes=[0, 0])
+        A = A0 + np.tensordot(self.theta, phi, axes=(0, 0))
         return A, B
 
 
 def simulate(dt: float = 0.1) -> None:
-    import control
+    import control  # type: ignore
 
     time = np.arange(0, 20, dt)
     vehicle = BicycleVehicle(road=None, position=[0, 5], speed=8.3)
@@ -298,7 +298,7 @@ def simulate(dt: float = 0.1) -> None:
         lpv.step(dt)
         # x_i_t = lpv.change_coordinates(lpv.x_i_t, back=True, interval=True)
         # Step
-        vehicle.act({"acceleration": 0, "steering": u})
+        vehicle.act({"acceleration": 0, "steering": u})  # type: ignore
         vehicle.step(dt)
 
     xx, uu = np.array(xx), np.array(uu)

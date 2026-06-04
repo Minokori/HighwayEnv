@@ -8,7 +8,7 @@ import numpy as np
 from gymnasium import spaces
 
 from highway_env import utils
-from highway_env.utils import Vector
+from highway_env.utils import ActionDict, Vector
 from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.dynamics import BicycleVehicle
 from highway_env.vehicle.kinematics import Vehicle
@@ -32,7 +32,7 @@ class ActionType:
         raise NotImplementedError
 
     @property
-    def vehicle_class(self) -> Callable:
+    def vehicle_class(self) -> type[Vehicle]:
         """
         The class of a vehicle able to execute the action.
 
@@ -59,14 +59,14 @@ class ActionType:
         raise NotImplementedError
 
     @property
-    def controlled_vehicle(self):
+    def controlled_vehicle(self) -> Vehicle:
         """The vehicle acted upon.
 
         If not set, the first controlled vehicle is used by default."""
         return self.__controlled_vehicle or self.env.vehicle
 
     @controlled_vehicle.setter
-    def controlled_vehicle(self, vehicle):
+    def controlled_vehicle(self, vehicle: Vehicle):
         self.__controlled_vehicle = vehicle
 
 
@@ -113,27 +113,36 @@ class ContinuousAction(ActionType):
         self.acceleration_range = (
             acceleration_range if acceleration_range else self.ACCELERATION_RANGE
         )
+        """the range of acceleration values [m/s²]"""
         self.steering_range = steering_range if steering_range else self.STEERING_RANGE
+        """the range of steering values [rad]"""
         self.speed_range = speed_range
+        """the range of reachable speeds [m/s]"""
         self.lateral = lateral
+        """whether steering control is enabled"""
         self.longitudinal = longitudinal
+        """whether throttle control is enabled"""
         if not self.lateral and not self.longitudinal:
             raise ValueError(
                 "Either longitudinal and/or lateral control must be enabled"
             )
         self.dynamical = dynamical
+        """whether to simulate dynamics (i.e. friction) rather than kinematics"""
         self.clip = clip
+        """whether to clip action to the defined range"""
         self.size = 2 if self.lateral and self.longitudinal else 1
+        """the size of the action space"""
         self.last_action = np.zeros(self.size)
+        """the last action executed, for use in dynamical control"""
 
     def space(self) -> spaces.Box:
         return spaces.Box(-1.0, 1.0, shape=(self.size,), dtype=np.float32)
 
     @property
-    def vehicle_class(self) -> Callable:
+    def vehicle_class(self) -> type[Vehicle]:
         return Vehicle if not self.dynamical else BicycleVehicle
 
-    def get_action(self, action: np.ndarray):
+    def get_action(self, action: np.ndarray) -> ActionDict:  # type: ignore
         if self.clip:
             action = np.clip(action, -1, 1)
         if self.speed_range:
@@ -192,7 +201,7 @@ class DiscreteAction(ContinuousAction):
     def act(self, action: int) -> None:
         cont_space = super().space()
         axes = np.linspace(cont_space.low, cont_space.high, self.actions_per_axis).T
-        all_actions = list(itertools.product(*axes))
+        all_actions:list[np.ndarray] = list(itertools.product(*axes)) # type: ignore
         super().act(all_actions[action])
 
 
@@ -234,7 +243,7 @@ class DiscreteMetaAction(ActionType):
             if target_speeds is not None
             else MDPVehicle.DEFAULT_TARGET_SPEEDS
         )
-        self.actions = (
+        self.actions:dict[int,str] = (
             self.ACTIONS_ALL
             if longitudinal and lateral
             else (
@@ -242,7 +251,7 @@ class DiscreteMetaAction(ActionType):
                 if longitudinal
                 else self.ACTIONS_LAT if lateral else None
             )
-        )
+        ) # type: ignore
         if self.actions is None:
             raise ValueError(
                 "At least longitudinal or lateral actions must be included"

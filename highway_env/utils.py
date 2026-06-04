@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import importlib
 import itertools
-from typing import Callable, List, Sequence, Tuple, Union
+from typing import Callable, List, Sequence, Tuple, TypedDict, Union
 
 import numpy as np
 
@@ -21,6 +21,20 @@ Interval = Union[
     List[float],
 ]
 
+
+class ActionDict(TypedDict):
+    """A dictionary representation of an action, for use in MultiAgentAction."""
+
+    acceleration: float
+    """the acceleration to apply, range in [-1,1],
+
+    mapped to the acceleration range defined in `ContinuousAction.acceleration_range`
+    """
+    steering: float
+    """the steering angle to apply, range in [-1,1],
+
+    mapped to the steering range defined in `ContinuousAction.steering_range`
+    """
 
 def do_every(duration: float, timer: float) -> bool:
     return duration < timer

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import copy
 from collections import deque
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from highway_env.road.road import Road
-from highway_env.utils import Vector
+from highway_env.road.road import LaneIndex, Road, Route
+from highway_env.utils import ActionDict, Vector
 from highway_env.vehicle.objects import RoadObject
 
 
@@ -17,6 +18,18 @@ class Vehicle(RoadObject):
     The vehicle is represented by a dynamical system: a modified bicycle model.
     It's state is propagated depending on its steering and acceleration actions.
     """
+    if TYPE_CHECKING:
+        color: tuple[int, ...]
+        """Color of the vehicle, for display purposes.
+
+        This field only exists in runtime.
+        """
+        route: Route
+        """
+        The planned route of the vehicle, as a sequence of lane indices.
+
+        This field only exists in runtime.
+        """
 
     LENGTH = 5.0
     """ Vehicle length [m] """
@@ -33,17 +46,17 @@ class Vehicle(RoadObject):
 
     def __init__(
         self,
-        road: Road,
+        road: Road | None,
         position: Vector,
         heading: float = 0,
         speed: float = 0,
         predition_type: str = "constant_steering",
     ):
-        super().__init__(road, position, heading, speed)
+        super().__init__(road, position, heading, speed)  # type: ignore
         self.prediction_type = predition_type
-        self.action = {"steering": 0, "acceleration": 0}
-        self.crashed = False
-        self.impact = None
+        self.action: ActionDict = {"steering": 0, "acceleration": 0}
+        self.crashed:bool = False
+        self.impact: Vector | None = None
         self.log = []
         self.history = deque(maxlen=self.HISTORY_SIZE)
 
@@ -51,7 +64,7 @@ class Vehicle(RoadObject):
     def create_random(
         cls,
         road: Road,
-        speed: float = None,
+        speed: float | None = None,
         lane_from: str | None = None,
         lane_to: str | None = None,
         lane_id: int | None = None,
@@ -118,7 +131,7 @@ class Vehicle(RoadObject):
             v.color = vehicle.color
         return v
 
-    def act(self, action: dict | str = None) -> None:
+    def act(self, action: ActionDict | None = None) -> None:
         """
         Store an action to be repeated.
 
@@ -180,9 +193,9 @@ class Vehicle(RoadObject):
         self, times: np.ndarray
     ) -> tuple[list[np.ndarray], list[float]]:
         if self.prediction_type == "zero_steering":
-            action = {"acceleration": 0.0, "steering": 0.0}
+            action: ActionDict = {"acceleration": 0.0, "steering": 0.0}
         elif self.prediction_type == "constant_steering":
-            action = {"acceleration": 0.0, "steering": self.action["steering"]}
+            action: ActionDict = {"acceleration": 0.0, "steering": self.action["steering"]}
         else:
             raise ValueError("Unknown predition type")
 
@@ -235,7 +248,7 @@ class Vehicle(RoadObject):
             return np.zeros((3,))
 
     def to_dict(
-        self, origin_vehicle: Vehicle = None, observe_intentions: bool = True
+        self, origin_vehicle: Vehicle | None = None, observe_intentions: bool = True
     ) -> dict:
         d = {
             "presence": 1,

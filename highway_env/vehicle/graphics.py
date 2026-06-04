@@ -149,7 +149,7 @@ class VehicleGraphics:
         image: pygame.SurfaceType,
         pos: Vector,
         angle: float,
-        origin_pos: Vector = None,
+        origin_pos: Vector|None = None,
         show_rect: bool = False,
     ) -> None:
         """Many thanks to https://stackoverflow.com/a/54714144."""
@@ -229,7 +229,7 @@ class VehicleGraphics:
             cls.display(v, surface, transparent=True, offscreen=offscreen)
 
     @classmethod
-    def get_color(cls, vehicle: Vehicle, transparent: bool = False) -> tuple[int]:
+    def get_color(cls, vehicle: Vehicle, transparent: bool = False) -> tuple[int,...]:
         color = cls.DEFAULT_COLOR
         if getattr(vehicle, "color", None):
             color = vehicle.color

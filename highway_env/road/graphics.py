@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Tuple, Union
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import numpy as np
 import pygame
@@ -34,7 +34,7 @@ class WorldSurface(pygame.Surface):
     def __init__(
         self, size: tuple[int, int], flags: object, surf: pygame.SurfaceType
     ) -> None:
-        super().__init__(size, flags, surf)
+        super().__init__(size, flags, surf)  # type: ignore
         self.origin = np.array([0, 0])
         self.scaling = self.INITIAL_SCALING
         self.centering_position = self.INITIAL_CENTERING
@@ -173,7 +173,7 @@ class LaneGraphics:
             + cls.STRIPE_LENGTH
         )
         lats = [(side - 0.5) * lane.width_at(s) for s in starts]
-        cls.draw_stripes(lane, surface, starts, ends, lats)
+        cls.draw_stripes(lane, surface, starts, ends, lats)  # type: ignore
 
     @classmethod
     def continuous_curve(
@@ -200,7 +200,7 @@ class LaneGraphics:
             + cls.STRIPE_SPACING
         )
         lats = [(side - 0.5) * lane.width_at(s) for s in starts]
-        cls.draw_stripes(lane, surface, starts, ends, lats)
+        cls.draw_stripes(lane, surface, starts, ends, lats)  # type: ignore
 
     @classmethod
     def continuous_line(
@@ -243,8 +243,8 @@ class LaneGraphics:
         :param ends: a list of ending longitudinal positions for each stripe [m]
         :param lats: a list of lateral positions for each stripe [m]
         """
-        starts = np.clip(starts, 0, lane.length)
-        ends = np.clip(ends, 0, lane.length)
+        starts = np.clip(starts, 0, lane.length)  # type: ignore
+        ends = np.clip(ends, 0, lane.length)  # type: ignore
         for k, _ in enumerate(starts):
             if abs(starts[k] - ends[k]) > 0.5 * cls.STRIPE_LENGTH:
                 pygame.draw.line(
@@ -262,7 +262,7 @@ class LaneGraphics:
         surface: WorldSurface,
         color: tuple[float],
         width: float,
-        draw_surface: pygame.Surface = None,
+        draw_surface: Optional[pygame.Surface] = None,
     ) -> None:
         draw_surface = draw_surface or surface
         stripes_count = int(
@@ -286,7 +286,7 @@ class LaneGraphics:
             ]
             new_dots = reversed(new_dots) if side else new_dots
             dots.extend(new_dots)
-        pygame.draw.polygon(draw_surface, color, dots, 0)
+        pygame.draw.polygon(draw_surface, color, dots, 0)  # type: ignore
 
 
 class RoadGraphics:
@@ -301,6 +301,9 @@ class RoadGraphics:
         :param surface: the pygame surface
         """
         surface.fill(surface.GREY)
+        if TYPE_CHECKING:
+            # We assert that the road network is not None, so that we can safely get the lanes.
+            assert road.network is not None
         for _from in road.network.graph.keys():
             for _to in road.network.graph[_from].keys():
                 for l in road.network.graph[_from][_to]:
@@ -399,7 +402,7 @@ class RoadObjectGraphics:
         image: pygame.SurfaceType,
         pos: Vector,
         angle: float,
-        origin_pos: Vector = None,
+        origin_pos: Optional[Vector] = None,
         show_rect: bool = False,
     ) -> None:
         """Many thanks to https://stackoverflow.com/a/54714144."""
