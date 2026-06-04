@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Union
+
 import numpy as np
 from numpy.typing import NDArray
 from scipy import interpolate
@@ -46,6 +48,7 @@ class LinearSpline2D:
     def get_dx_dy(self, lon: float) -> tuple[float, float]:
         idx_pose = self._get_idx_segment_for_lon(lon)
         pose = self.poses[idx_pose]
+        return pose.normal[0], pose.normal[1]
         return pose.normal[0], pose.normal[1]
 
     def cartesian_to_frenet(self, position: tuple[float, float] | NDArray[np.float32]) -> tuple[float, float]:

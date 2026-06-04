@@ -9,6 +9,7 @@ from gymnasium import spaces
 
 from highway_env import utils
 from highway_env.utils import ActionDict, Vector
+from highway_env.utils import ActionDict, Vector
 from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.dynamics import BicycleVehicle
 from highway_env.vehicle.kinematics import Vehicle

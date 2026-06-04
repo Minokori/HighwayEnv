@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+import enum
 from abc import ABCMeta, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -391,7 +392,7 @@ class CircularLane(AbstractLane):
         r:float = np.linalg.norm(delta) # type: ignore
         longitudinal = self.direction * (phi - self.start_phase) * self.radius
         lateral = self.direction * (self.radius - r)
-        return longitudinal, lateral
+        return longitudinal, lateral  # type: ignore
 
     @classmethod
     def from_config(cls, config: dict):

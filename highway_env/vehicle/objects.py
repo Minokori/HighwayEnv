@@ -30,6 +30,7 @@ class RoadObject(ABC):
     def __init__(
         self,
         road: Road | None,
+        road: Road | None,
         position: Sequence[float],
         heading: float = 0,
         speed: float = 0,

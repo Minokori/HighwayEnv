@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from collections import deque
 from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray

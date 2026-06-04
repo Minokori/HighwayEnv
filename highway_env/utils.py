@@ -35,6 +35,20 @@ class ActionDict(TypedDict):
     mapped to the steering range defined in `ContinuousAction.steering_range`
     """
 
+class ActionDict(TypedDict):
+    """A dictionary representation of an action, for use in MultiAgentAction."""
+
+    acceleration: float
+    """the acceleration to apply, range in [-1,1],
+
+    mapped to the acceleration range defined in `ContinuousAction.acceleration_range`
+    """
+    steering: float
+    """the steering angle to apply, range in [-1,1],
+
+    mapped to the steering range defined in `ContinuousAction.steering_range`
+    """
+
 def do_every(duration: float, timer: float) -> bool:
     return duration < timer
 
