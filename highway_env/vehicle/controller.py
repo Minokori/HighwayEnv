@@ -393,8 +393,7 @@ class MDPVehicle(ControlledVehicle):
         actions: list[ActionDict | str | None],
         action_duration: float,
         trajectory_timestep: float,
-        dt: float,
-    ) -> list[ControlledVehicle]:
+        dt: float) -> list[ControlledVehicle]:
         """
         Predict the future trajectory of the vehicle given a sequence of actions.
 
