@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
+from highway_env.envs.common.abstract import EnvironmentConfig
+from highway_env.vehicle.controller import ControlledVehicle
 import numpy as np
 import pygame
 
@@ -16,8 +19,7 @@ from highway_env.vehicle.graphics import VehicleGraphics
 
 
 if TYPE_CHECKING:
-    from highway_env.envs import AbstractEnv
-    from highway_env.envs.common.abstract import Action
+    from highway_env.envs.common.abstract import AbstractEnv, Action
 
 
 class EnvViewer:
@@ -26,16 +28,15 @@ class EnvViewer:
     SAVE_IMAGES = False
     agent_display = None
 
-    def __init__(self, env: AbstractEnv, config: dict | None = None) -> None:
-        self.env = env
-        self.config = config or env.config
+    def __init__(self, env: AbstractEnv, config: EnvironmentConfig | None = None) -> None:
+        self.env: AbstractEnv = env
+        self.config: EnvironmentConfig = config or env.config
         self.offscreen = self.config["offscreen_rendering"]
-        self.observer_vehicle = None
-        self.agent_surface = None
+        self.observer_vehicle:ControlledVehicle = None # type: ignore
+        self.agent_surface:pygame.Surface = None # type: ignore
         self.vehicle_trajectory = None
         self.frame = 0
         self.directory = None
-
         pygame.init()
         pygame.display.set_caption("Highway-env")
         panel_size = (self.config["screen_width"], self.config["screen_height"])
@@ -95,9 +96,9 @@ class EnvViewer:
         :param actions: list of action, following the env's action space specification
         """
         if isinstance(self.env.action_type, DiscreteMetaAction):
-            actions = [self.env.action_type.actions[a] for a in actions]
+            actions = [self.env.action_type.actions[a] for a in actions] # type: ignore
         elif isinstance(self.env.action_type, ContinuousAction):
-            actions = [self.env.action_type.get_action(a) for a in actions]
+            actions = [self.env.action_type.get_action(a) for a in actions] # type: ignore
         if len(actions) > 1:
             self.vehicle_trajectory = self.env.vehicle.predict_trajectory(
                 actions,
@@ -208,7 +209,7 @@ class EventHandler:
         if isinstance(action_type, DiscreteMetaAction):
             cls.handle_discrete_action_event(action_type, event)
         elif action_type.__class__ == ContinuousAction:
-            cls.handle_continuous_action_event(action_type, event)
+            cls.handle_continuous_action_event(action_type, event) # type: ignore
 
     @classmethod
     def handle_discrete_action_event(

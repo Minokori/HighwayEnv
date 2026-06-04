@@ -123,7 +123,7 @@ class VehicleGraphics:
                 cls.blit_rotate(
                     vehicle_surface,
                     tire_surface,
-                    tire_position,
+                    np.array(tire_position),
                     np.rad2deg(-tire_angle),
                 )
 
@@ -134,7 +134,7 @@ class VehicleGraphics:
             # convert_alpha throws errors in offscreen mode
             # see https://stackoverflow.com/a/19057853
             vehicle_surface = pygame.Surface.convert_alpha(vehicle_surface)
-        cls.blit_rotate(surface, vehicle_surface, position, np.rad2deg(-h))
+        cls.blit_rotate(surface, vehicle_surface, np.array(position), np.rad2deg(-h))
 
         # Label
         if label:
@@ -149,7 +149,7 @@ class VehicleGraphics:
         image: pygame.SurfaceType,
         pos: Vector,
         angle: float,
-        origin_pos: Vector = None,
+        origin_pos: Vector|None = None,
         show_rect: bool = False,
     ) -> None:
         """Many thanks to https://stackoverflow.com/a/54714144."""
@@ -168,7 +168,7 @@ class VehicleGraphics:
 
         # calculate the translation of the pivot
         if origin_pos is None:
-            origin_pos = w / 2, h / 2
+            origin_pos = np.array([w / 2, h / 2])
         pivot = pygame.math.Vector2(origin_pos[0], -origin_pos[1])
         pivot_rotate = pivot.rotate(angle)
         pivot_move = pivot_rotate - pivot
@@ -229,7 +229,7 @@ class VehicleGraphics:
             cls.display(v, surface, transparent=True, offscreen=offscreen)
 
     @classmethod
-    def get_color(cls, vehicle: Vehicle, transparent: bool = False) -> tuple[int]:
+    def get_color(cls, vehicle: Vehicle, transparent: bool = False) -> tuple[int,...]:
         color = cls.DEFAULT_COLOR
         if getattr(vehicle, "color", None):
             color = vehicle.color

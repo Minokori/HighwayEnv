@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import numpy as np
+from torch import TYPE_CHECKING
 
 from highway_env import utils
 from highway_env.road.road import LaneIndex, Road, Route
-from highway_env.utils import Vector
+from highway_env.utils import ActionDict, Vector
 from highway_env.vehicle.controller import ControlledVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
@@ -51,11 +52,11 @@ class IDMVehicle(ControlledVehicle):
         position: Vector,
         heading: float = 0,
         speed: float = 0,
-        target_lane_index: int = None,
-        target_speed: float = None,
-        route: Route = None,
+        target_lane_index: LaneIndex | None = None,
+        target_speed: float | None = None,
+        route: Route | None = None,
         enable_lane_change: bool = True,
-        timer: float = None,
+        timer: float | None = None,
     ):
         super().__init__(
             road, position, heading, speed, target_lane_index, target_speed, route
@@ -90,7 +91,7 @@ class IDMVehicle(ControlledVehicle):
         )
         return v
 
-    def act(self, action: dict | str = None):
+    def act(self, action: ActionDict | str | None = None):  # type: ignore
         """
         Execute an action.
 
@@ -101,7 +102,7 @@ class IDMVehicle(ControlledVehicle):
         """
         if self.crashed:
             return
-        action = {}
+        action: ActionDict = {}  # type: ignore
         # Lateral: MOBIL
         self.follow_road()
         if self.enable_lane_change:
@@ -149,9 +150,9 @@ class IDMVehicle(ControlledVehicle):
 
     def acceleration(
         self,
-        ego_vehicle: ControlledVehicle,
-        front_vehicle: Vehicle = None,
-        rear_vehicle: Vehicle = None,
+        ego_vehicle: Vehicle | None,
+        front_vehicle: Vehicle | None = None,
+        rear_vehicle: Vehicle | None = None,
     ) -> float:
         """
         Compute an acceleration command with the Intelligent Driver Model.
@@ -192,7 +193,7 @@ class IDMVehicle(ControlledVehicle):
     def desired_gap(
         self,
         ego_vehicle: Vehicle,
-        front_vehicle: Vehicle = None,
+        front_vehicle: Vehicle | None = None,
         projected: bool = True,
     ) -> float:
         """
@@ -206,6 +207,10 @@ class IDMVehicle(ControlledVehicle):
         d0 = self.DISTANCE_WANTED
         tau = self.TIME_WANTED
         ab = -self.COMFORT_ACC_MAX * self.COMFORT_ACC_MIN
+
+        if TYPE_CHECKING:
+            # We assert in runtime that front_vehicle is not None.
+            assert front_vehicle is not None
         dv = (
             np.dot(ego_vehicle.velocity - front_vehicle.velocity, ego_vehicle.direction)
             if projected
@@ -275,6 +280,11 @@ class IDMVehicle(ControlledVehicle):
         """
         # Is the maneuver unsafe for the new following vehicle?
         new_preceding, new_following = self.road.neighbour_vehicles(self, lane_index)
+
+        if TYPE_CHECKING:
+            # We assert in runtime that new_following is not None.
+            assert isinstance(new_following, ControlledVehicle)
+
         new_following_a = self.acceleration(
             ego_vehicle=new_following, front_vehicle=new_preceding
         )
@@ -289,6 +299,10 @@ class IDMVehicle(ControlledVehicle):
         self_pred_a = self.acceleration(ego_vehicle=self, front_vehicle=new_preceding)
         if self.route and self.route[0][2] is not None:
             # Wrong direction
+
+            if TYPE_CHECKING:
+                assert self.target_lane_index[2] is not None and lane_index[2] is not None
+
             if np.sign(lane_index[2] - self.target_lane_index[2]) != np.sign(
                 self.route[0][2] - self.target_lane_index[2]
             ):
@@ -336,7 +350,8 @@ class IDMVehicle(ControlledVehicle):
         if self.target_lane_index != self.lane_index and self.speed < stopped_speed:
             _, rear = self.road.neighbour_vehicles(self)
             _, new_rear = self.road.neighbour_vehicles(
-                self, self.road.network.get_lane(self.target_lane_index)
+                # BUG why pass a AbstractLane object instead of a lane index?
+                self, self.road.network.get_lane(self.target_lane_index)  # type: ignore
             )
             # Check for free room behind on both lanes
             if (not rear or rear.lane_distance_to(self) > safe_distance) and (
@@ -377,12 +392,12 @@ class LinearVehicle(IDMVehicle):
         position: Vector,
         heading: float = 0,
         speed: float = 0,
-        target_lane_index: int = None,
-        target_speed: float = None,
-        route: Route = None,
+        target_lane_index: LaneIndex | None = None,
+        target_speed: float | None = None,
+        route: Route | None = None,
         enable_lane_change: bool = True,
-        timer: float = None,
-        data: dict = None,
+        timer: float | None = None,
+        data: dict | None = None,
     ):
         super().__init__(
             road,
@@ -398,7 +413,7 @@ class LinearVehicle(IDMVehicle):
         self.data = data if data is not None else {}
         self.collecting_data = True
 
-    def act(self, action: dict | str = None):
+    def act(self, action: ActionDict | str | None = None):
         if self.collecting_data:
             self.collect_data()
         super().act(action)
@@ -416,8 +431,8 @@ class LinearVehicle(IDMVehicle):
     def acceleration(
         self,
         ego_vehicle: ControlledVehicle,
-        front_vehicle: Vehicle = None,
-        rear_vehicle: Vehicle = None,
+        front_vehicle: Vehicle | None = None,
+        rear_vehicle: Vehicle | None = None,
     ) -> float:
         """
         Compute an acceleration command with a Linear Model.
@@ -443,9 +458,9 @@ class LinearVehicle(IDMVehicle):
 
     def acceleration_features(
         self,
-        ego_vehicle: ControlledVehicle,
-        front_vehicle: Vehicle = None,
-        rear_vehicle: Vehicle = None,
+        ego_vehicle: ControlledVehicle | None,
+        front_vehicle: Vehicle | None = None,
+        rear_vehicle: Vehicle | None = None,
     ) -> np.ndarray:
         vt, dv, dp = 0, 0, 0
         if ego_vehicle:

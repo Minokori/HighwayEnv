@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import functools
 import itertools
-from typing import TYPE_CHECKING, Callable, Union
+from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 from gymnasium import spaces
 
 from highway_env import utils
-from highway_env.utils import Vector
+from highway_env.utils import ActionDict, Vector
 from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.dynamics import BicycleVehicle
 from highway_env.vehicle.kinematics import Vehicle
@@ -17,22 +17,22 @@ from highway_env.vehicle.kinematics import Vehicle
 if TYPE_CHECKING:
     from highway_env.envs.common.abstract import AbstractEnv
 
-Action = Union[int, np.ndarray]
+Action = np.ndarray[tuple[int], np.dtype[np.float32]] | int
 
 
 class ActionType:
     """A type of action specifies its definition space, and how actions are executed in the environment"""
 
     def __init__(self, env: AbstractEnv, **kwargs) -> None:
-        self.env = env
-        self.__controlled_vehicle = None
+        self.env:AbstractEnv = env
+        self.__controlled_vehicle:Vehicle|None = None
 
     def space(self) -> spaces.Space:
         """The action space."""
         raise NotImplementedError
 
     @property
-    def vehicle_class(self) -> Callable:
+    def vehicle_class(self) -> type[Vehicle]:
         """
         The class of a vehicle able to execute the action.
 
@@ -52,21 +52,21 @@ class ActionType:
         """
         raise NotImplementedError
 
-    def get_available_actions(self):
+    def get_available_actions(self)->list[int]:
         """
         For discrete action space, return the list of available actions.
         """
         raise NotImplementedError
 
     @property
-    def controlled_vehicle(self):
+    def controlled_vehicle(self) -> MDPVehicle:
         """The vehicle acted upon.
 
         If not set, the first controlled vehicle is used by default."""
-        return self.__controlled_vehicle or self.env.vehicle
+        return self.__controlled_vehicle or self.env.vehicle # type: ignore
 
     @controlled_vehicle.setter
-    def controlled_vehicle(self, vehicle):
+    def controlled_vehicle(self, vehicle: Vehicle):
         self.__controlled_vehicle = vehicle
 
 
@@ -110,30 +110,38 @@ class ContinuousAction(ActionType):
         :param clip: clip action to the defined range
         """
         super().__init__(env)
-        self.acceleration_range = (
-            acceleration_range if acceleration_range else self.ACCELERATION_RANGE
-        )
-        self.steering_range = steering_range if steering_range else self.STEERING_RANGE
-        self.speed_range = speed_range
-        self.lateral = lateral
-        self.longitudinal = longitudinal
+        self.acceleration_range:tuple[float, float] = acceleration_range if acceleration_range else self.ACCELERATION_RANGE
+
+        """the range of acceleration values [m/s²]"""
+        self.steering_range:tuple[float, float] = steering_range if steering_range else self.STEERING_RANGE
+        """the range of steering values [rad]"""
+        self.speed_range:tuple[float, float]|None = speed_range
+        """the range of reachable speeds [m/s]"""
+        self.lateral:bool = lateral
+        """whether steering control is enabled"""
+        self.longitudinal:bool = longitudinal
+        """whether throttle control is enabled"""
         if not self.lateral and not self.longitudinal:
             raise ValueError(
                 "Either longitudinal and/or lateral control must be enabled"
             )
-        self.dynamical = dynamical
-        self.clip = clip
-        self.size = 2 if self.lateral and self.longitudinal else 1
-        self.last_action = np.zeros(self.size)
+        self.dynamical:bool = dynamical
+        """whether to simulate dynamics (i.e. friction) rather than kinematics"""
+        self.clip:bool = clip
+        """whether to clip action to the defined range"""
+        self.size:int = 2 if self.lateral and self.longitudinal else 1
+        """the size of the action space"""
+        self.last_action:np.ndarray = np.zeros(self.size)
+        """the last action executed, for use in dynamical control"""
 
     def space(self) -> spaces.Box:
         return spaces.Box(-1.0, 1.0, shape=(self.size,), dtype=np.float32)
 
     @property
-    def vehicle_class(self) -> Callable:
+    def vehicle_class(self) -> type[Vehicle]:
         return Vehicle if not self.dynamical else BicycleVehicle
 
-    def get_action(self, action: np.ndarray):
+    def get_action(self, action: np.ndarray) -> ActionDict:  # type: ignore
         if self.clip:
             action = np.clip(action, -1, 1)
         if self.speed_range:
@@ -143,18 +151,18 @@ class ContinuousAction(ActionType):
             ) = self.speed_range
         if self.longitudinal and self.lateral:
             return {
-                "acceleration": utils.lmap(action[0], [-1, 1], self.acceleration_range),
-                "steering": utils.lmap(action[1], [-1, 1], self.steering_range),
+                "acceleration": utils.lmap(action[0], np.array([-1, 1]), np.array(self.acceleration_range)),
+                "steering": utils.lmap(action[1], np.array([-1, 1]), np.array(self.steering_range)),
             }
         elif self.longitudinal:
             return {
-                "acceleration": utils.lmap(action[0], [-1, 1], self.acceleration_range),
+                "acceleration": utils.lmap(action[0], np.array([-1, 1]), np.array(self.acceleration_range)),
                 "steering": 0,
             }
         elif self.lateral:
             return {
                 "acceleration": 0,
-                "steering": utils.lmap(action[0], [-1, 1], self.steering_range),
+                "steering": utils.lmap(action[0], np.array([-1, 1]), np.array(self.steering_range)),
             }
 
     def act(self, action: np.ndarray) -> None:
@@ -184,7 +192,7 @@ class DiscreteAction(ContinuousAction):
             dynamical=dynamical,
             clip=clip,
         )
-        self.actions_per_axis = actions_per_axis
+        self.actions_per_axis:int = actions_per_axis
 
     def space(self) -> spaces.Discrete:
         return spaces.Discrete(self.actions_per_axis**self.size)
@@ -192,7 +200,7 @@ class DiscreteAction(ContinuousAction):
     def act(self, action: int) -> None:
         cont_space = super().space()
         axes = np.linspace(cont_space.low, cont_space.high, self.actions_per_axis).T
-        all_actions = list(itertools.product(*axes))
+        all_actions:list[np.ndarray] = list(itertools.product(*axes)) # type: ignore
         super().act(all_actions[action])
 
 
@@ -227,14 +235,14 @@ class DiscreteMetaAction(ActionType):
         :param target_speeds: the list of speeds the vehicle is able to track
         """
         super().__init__(env)
-        self.longitudinal = longitudinal
-        self.lateral = lateral
-        self.target_speeds = (
+        self.longitudinal:bool = longitudinal
+        self.lateral:bool = lateral
+        self.target_speeds:Vector = (
             np.array(target_speeds)
             if target_speeds is not None
             else MDPVehicle.DEFAULT_TARGET_SPEEDS
         )
-        self.actions = (
+        self.actions:dict[int,str] = (
             self.ACTIONS_ALL
             if longitudinal and lateral
             else (
@@ -242,7 +250,7 @@ class DiscreteMetaAction(ActionType):
                 if longitudinal
                 else self.ACTIONS_LAT if lateral else None
             )
-        )
+        ) # type: ignore
         if self.actions is None:
             raise ValueError(
                 "At least longitudinal or lateral actions must be included"
@@ -271,6 +279,9 @@ class DiscreteMetaAction(ActionType):
         actions = [self.actions_indexes["IDLE"]]
         network = self.controlled_vehicle.road.network
         for l_index in network.side_lanes(self.controlled_vehicle.lane_index):
+
+            if TYPE_CHECKING:
+                assert self.controlled_vehicle.lane_index[2] is not None and l_index[2] is not None
             if (
                 l_index[2] < self.controlled_vehicle.lane_index[2]
                 and network.get_lane(l_index).is_reachable_from(

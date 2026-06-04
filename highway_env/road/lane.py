@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import enum
 from abc import ABCMeta, abstractmethod
+from typing import TYPE_CHECKING
 
 import numpy as np
+from numpy.typing import NDArray
 
 from highway_env import utils
 from highway_env.road.spline import LinearSpline2D
@@ -12,6 +15,24 @@ from highway_env.utils import Vector, class_from_path, get_class_path, wrap_to_p
 class AbstractLane:
     """A lane on the road, described by its central curve."""
 
+    if TYPE_CHECKING:
+        forbidden: bool
+        """is changing to this lane forbidden.
+
+        This field only exist in implementations of AbstractLane, but not in the abstract class itself.
+        """
+        speed_limit: float
+        """the lane speed limit [m/s].
+
+        This field only exist in implementations of AbstractLane, but not in the abstract class itself.
+        """
+
+        priority: int
+        """priority level of the lane, for determining who has right of way.
+
+        This field only exist in implementations of AbstractLane, but not in the abstract class itself.
+        """
+
     metaclass__ = ABCMeta
     DEFAULT_WIDTH: float = 4
     VEHICLE_LENGTH: float = 5
@@ -19,7 +40,7 @@ class AbstractLane:
     line_types: list[LineType]
 
     @abstractmethod
-    def position(self, longitudinal: float, lateral: float) -> np.ndarray:
+    def position(self, longitudinal: float, lateral: float) -> NDArray[np.float32]:
         """
         Convert local lane coordinates to a world position.
 
@@ -30,7 +51,7 @@ class AbstractLane:
         raise NotImplementedError()
 
     @abstractmethod
-    def local_coordinates(self, position: np.ndarray) -> tuple[float, float]:
+    def local_coordinates(self, position: NDArray[np.float32]) -> tuple[float, float]:
         """
         Convert a world position to local lane coordinates.
 
@@ -79,9 +100,9 @@ class AbstractLane:
 
     def on_lane(
         self,
-        position: np.ndarray,
-        longitudinal: float = None,
-        lateral: float = None,
+        position: NDArray[np.float32],
+        longitudinal: float|None = None,
+        lateral: float|None = None,
         margin: float = 0,
     ) -> bool:
         """
@@ -101,7 +122,7 @@ class AbstractLane:
         )
         return is_on
 
-    def is_reachable_from(self, position: np.ndarray) -> bool:
+    def is_reachable_from(self, position: NDArray[np.float32]) -> bool:
         """
         Whether the lane is reachable from a given world position
 
@@ -118,23 +139,23 @@ class AbstractLane:
         return is_close
 
     def after_end(
-        self, position: np.ndarray, longitudinal: float = None, lateral: float = None
+        self, position: NDArray[np.float32], longitudinal: float|None = None, lateral: float|None = None
     ) -> bool:
         if not longitudinal:
             longitudinal, _ = self.local_coordinates(position)
         return longitudinal > self.length - self.VEHICLE_LENGTH / 2
 
-    def distance(self, position: np.ndarray):
+    def distance(self, position: NDArray[np.float32]):
         """Compute the L1 distance [m] from a position to the lane."""
         s, r = self.local_coordinates(position)
         return abs(r) + max(s - self.length, 0) + max(0 - s, 0)
 
     def distance_with_heading(
         self,
-        position: np.ndarray,
+        position: NDArray[np.float32],
         heading: float | None,
         heading_weight: float = 1.0,
-    ):
+    ) -> float:
         """Compute a weighted distance in position and heading to the lane."""
         if heading is None:
             return self.distance(position)
@@ -142,12 +163,12 @@ class AbstractLane:
         angle = np.abs(self.local_angle(heading, s))
         return abs(r) + max(s - self.length, 0) + max(0 - s, 0) + heading_weight * angle
 
-    def local_angle(self, heading: float, long_offset: float):
+    def local_angle(self, heading: float, long_offset: float) -> float:
         """Compute non-normalised angle of heading to the lane."""
         return wrap_to_pi(heading - self.heading_at(long_offset))
 
 
-class LineType:
+class LineType(enum.Enum):
     """A lane side line type."""
 
     NONE = 0
@@ -164,7 +185,7 @@ class StraightLane(AbstractLane):
         start: Vector,
         end: Vector,
         width: float = AbstractLane.DEFAULT_WIDTH,
-        line_types: tuple[LineType, LineType] = None,
+        line_types: tuple[LineType, LineType]|None = None,
         forbidden: bool = False,
         speed_limit: float = 20,
         priority: int = 0,
@@ -175,25 +196,36 @@ class StraightLane(AbstractLane):
         :param start: the lane starting position [m]
         :param end: the lane ending position [m]
         :param width: the lane width [m]
-        :param line_types: the type of lines on both sides of the lane
+        :param line_types: the type of lines on both sides of the lane, default to STRIPED.
         :param forbidden: is changing to this lane forbidden
         :param priority: priority level of the lane, for determining who has right of way
         """
-        self.start = np.array(start)
-        self.end = np.array(end)
-        self.width = width
-        self.heading = np.arctan2(
+        self.start: NDArray[np.float32] = np.array(start)
+        """the lane starting position [m]"""
+        self.end: NDArray[np.float32] = np.array(end)
+        """the lane ending position [m]"""
+        self.width: float = width
+        """the lane width [m]"""
+        self.heading: float = np.arctan2(
             self.end[1] - self.start[1], self.end[0] - self.start[0]
         )
-        self.length = np.linalg.norm(self.end - self.start)
-        self.line_types = line_types or [LineType.STRIPED, LineType.STRIPED]
-        self.direction = (self.end - self.start) / self.length
-        self.direction_lateral = np.array([-self.direction[1], self.direction[0]])
-        self.forbidden = forbidden
-        self.priority = priority
-        self.speed_limit = speed_limit
+        """the lane heading [rad]"""
+        self.length:float = np.linalg.norm(self.end - self.start)  # type: ignore
+        """the lane length [m]"""
+        self.line_types: list[LineType] = [*line_types] if line_types else [LineType.STRIPED, LineType.STRIPED]
+        """the type of lines on both sides of the lane"""
+        self.direction: NDArray[np.float32] = (self.end - self.start) / self.length
+        """the lane direction vector"""
+        self.direction_lateral: NDArray[np.float32] = np.array([-self.direction[1], self.direction[0]])
+        """the lane lateral direction vector"""
+        self.forbidden: bool = forbidden
+        """is changing to this lane forbidden"""
+        self.priority: int = priority
+        """priority level of the lane, for determining who has right of way"""
+        self.speed_limit: float = speed_limit
+        """the lane speed limit [m/s]"""
 
-    def position(self, longitudinal: float, lateral: float) -> np.ndarray:
+    def position(self, longitudinal: float, lateral: float) -> NDArray[np.float32]:
         return (
             self.start
             + longitudinal * self.direction
@@ -206,7 +238,7 @@ class StraightLane(AbstractLane):
     def width_at(self, longitudinal: float) -> float:
         return self.width
 
-    def local_coordinates(self, position: np.ndarray) -> tuple[float, float]:
+    def local_coordinates(self, position: NDArray[np.float32]) -> tuple[float, float]:
         delta = position - self.start
         longitudinal = np.dot(delta, self.direction)
         lateral = np.dot(delta, self.direction_lateral)
@@ -244,7 +276,7 @@ class SineLane(StraightLane):
         pulsation: float,
         phase: float,
         width: float = StraightLane.DEFAULT_WIDTH,
-        line_types: list[LineType] = None,
+        line_types: tuple[LineType, LineType]|None = None,
         forbidden: bool = False,
         speed_limit: float = 20,
         priority: int = 0,
@@ -265,7 +297,7 @@ class SineLane(StraightLane):
         self.pulsation = pulsation
         self.phase = phase
 
-    def position(self, longitudinal: float, lateral: float) -> np.ndarray:
+    def position(self, longitudinal: float, lateral: float) -> NDArray[np.float32]:
         return super().position(
             longitudinal,
             lateral
@@ -279,7 +311,7 @@ class SineLane(StraightLane):
             * np.cos(self.pulsation * longitudinal + self.phase)
         )
 
-    def local_coordinates(self, position: np.ndarray) -> tuple[float, float]:
+    def local_coordinates(self, position: NDArray[np.float32]) -> tuple[float, float]:
         longitudinal, lateral = super().local_coordinates(position)
         return longitudinal, lateral - self.amplitude * np.sin(
             self.pulsation * longitudinal + self.phase
@@ -319,26 +351,26 @@ class CircularLane(AbstractLane):
         end_phase: float,
         clockwise: bool = True,
         width: float = AbstractLane.DEFAULT_WIDTH,
-        line_types: list[LineType] = None,
+        line_types: tuple[LineType, LineType]|None = None,
         forbidden: bool = False,
         speed_limit: float = 20,
         priority: int = 0,
     ) -> None:
         super().__init__()
-        self.center = np.array(center)
-        self.radius = radius
-        self.start_phase = start_phase
-        self.end_phase = end_phase
-        self.clockwise = clockwise
-        self.direction = 1 if clockwise else -1
-        self.width = width
-        self.line_types = line_types or [LineType.STRIPED, LineType.STRIPED]
-        self.forbidden = forbidden
-        self.length = radius * (end_phase - start_phase) * self.direction
-        self.priority = priority
-        self.speed_limit = speed_limit
+        self.center: NDArray[np.float32] = np.array(center)
+        self.radius:float = radius
+        self.start_phase:float = start_phase
+        self.end_phase:float = end_phase
+        self.clockwise: bool = clockwise
+        self.direction: int = 1 if clockwise else -1
+        self.width: float = width
+        self.line_types: list[LineType] = [*line_types] if line_types else [LineType.STRIPED, LineType.STRIPED]
+        self.forbidden:bool = forbidden
+        self.length: float = radius * (end_phase - start_phase) * self.direction
+        self.priority: int = priority
+        self.speed_limit: float = speed_limit
 
-    def position(self, longitudinal: float, lateral: float) -> np.ndarray:
+    def position(self, longitudinal: float, lateral: float) -> NDArray[np.float32]:
         phi = self.direction * longitudinal / self.radius + self.start_phase
         return self.center + (self.radius - lateral * self.direction) * np.array(
             [np.cos(phi), np.sin(phi)]
@@ -352,11 +384,11 @@ class CircularLane(AbstractLane):
     def width_at(self, longitudinal: float) -> float:
         return self.width
 
-    def local_coordinates(self, position: np.ndarray) -> tuple[float, float]:
+    def local_coordinates(self, position: NDArray[np.float32]) -> tuple[float, float]:
         delta = position - self.center
-        phi = np.arctan2(delta[1], delta[0])
+        phi:float = np.arctan2(delta[1], delta[0])
         phi = self.start_phase + utils.wrap_to_pi(phi - self.start_phase)
-        r = np.linalg.norm(delta)
+        r:float = np.linalg.norm(delta) # type: ignore
         longitudinal = self.direction * (phi - self.start_phase) * self.radius
         lateral = self.direction * (self.radius - r)
         return longitudinal, lateral
@@ -393,25 +425,25 @@ class PolyLaneFixedWidth(AbstractLane):
         self,
         lane_points: list[tuple[float, float]],
         width: float = AbstractLane.DEFAULT_WIDTH,
-        line_types: tuple[LineType, LineType] = None,
+        line_types: tuple[LineType, LineType]|None = None,
         forbidden: bool = False,
         speed_limit: float = 20,
         priority: int = 0,
     ) -> None:
-        self.curve = LinearSpline2D(lane_points)
-        self.length = self.curve.length
-        self.width = width
-        self.line_types = line_types
-        self.forbidden = forbidden
-        self.speed_limit = speed_limit
-        self.priority = priority
+        self.curve:LinearSpline2D = LinearSpline2D(lane_points)
+        self.length: float = self.curve.length
+        self.width: float = width
+        self.line_types: list[LineType] = [*line_types] if line_types else [LineType.STRIPED, LineType.STRIPED]
+        self.forbidden: bool = forbidden
+        self.speed_limit: float = speed_limit
+        self.priority: int = priority
 
-    def position(self, longitudinal: float, lateral: float) -> np.ndarray:
+    def position(self, longitudinal: float, lateral: float) -> NDArray[np.float32]:
         x, y = self.curve(longitudinal)
         yaw = self.heading_at(longitudinal)
         return np.array([x - np.sin(yaw) * lateral, y + np.cos(yaw) * lateral])
 
-    def local_coordinates(self, position: np.ndarray) -> tuple[float, float]:
+    def local_coordinates(self, position: NDArray[np.float32]) -> tuple[float, float]:
         lon, lat = self.curve.cartesian_to_frenet(position)
         return lon, lat
 
@@ -452,7 +484,7 @@ class PolyLane(PolyLaneFixedWidth):
         lane_points: list[tuple[float, float]],
         left_boundary_points: list[tuple[float, float]],
         right_boundary_points: list[tuple[float, float]],
-        line_types: tuple[LineType, LineType] = None,
+        line_types: tuple[LineType, LineType]|None = None,
         forbidden: bool = False,
         speed_limit: float = 20,
         priority: int = 0,
@@ -464,8 +496,8 @@ class PolyLane(PolyLaneFixedWidth):
             speed_limit=speed_limit,
             priority=priority,
         )
-        self.right_boundary = LinearSpline2D(right_boundary_points)
-        self.left_boundary = LinearSpline2D(left_boundary_points)
+        self.right_boundary: LinearSpline2D = LinearSpline2D(right_boundary_points)
+        self.left_boundary: LinearSpline2D = LinearSpline2D(left_boundary_points)
         self._init_width()
 
     def width_at(self, longitudinal: float) -> float:
@@ -482,10 +514,10 @@ class PolyLane(PolyLaneFixedWidth):
         """
         center_x, center_y = self.position(longitudinal, 0)
         right_x, right_y = self.right_boundary(
-            self.right_boundary.cartesian_to_frenet([center_x, center_y])[0]
+            self.right_boundary.cartesian_to_frenet((center_x, center_y))[0]
         )
         left_x, left_y = self.left_boundary(
-            self.left_boundary.cartesian_to_frenet([center_x, center_y])[0]
+            self.left_boundary.cartesian_to_frenet((center_x, center_y))[0]
         )
 
         dist_to_center_right = np.linalg.norm(
@@ -498,7 +530,7 @@ class PolyLane(PolyLaneFixedWidth):
         return max(
             min(dist_to_center_right, dist_to_center_left) * 2,
             AbstractLane.DEFAULT_WIDTH,
-        )
+        )  # type: ignore
 
     def _init_width(self):
         """
@@ -529,7 +561,7 @@ class PolyLane(PolyLaneFixedWidth):
         return config
 
 
-def _to_serializable(arg: np.ndarray | list) -> list:
+def _to_serializable(arg: NDArray[np.float32] | list) -> list:
     if isinstance(arg, np.ndarray):
         return arg.tolist()
     return arg

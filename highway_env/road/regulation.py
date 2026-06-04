@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-import numpy as np
+from collections.abc import Sequence
 
+import numpy as np
+from numpy.typing import NDArray
 from highway_env import utils
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.vehicle.controller import ControlledVehicle, MDPVehicle
@@ -10,16 +12,17 @@ from highway_env.vehicle.objects import Obstacle
 
 
 class RegulatedRoad(Road):
-    YIELDING_COLOR: tuple[float, float, float] = None
+    # BUG It seems that it should have a default value
+    YIELDING_COLOR: tuple[int,...] = None  # type: ignore
     REGULATION_FREQUENCY: int = 2
     YIELD_DURATION: float = 0.0
 
     def __init__(
         self,
-        network: RoadNetwork = None,
-        vehicles: list[Vehicle] = None,
-        obstacles: list[Obstacle] = None,
-        np_random: np.random.RandomState = None,
+        network: RoadNetwork|None = None,
+        vehicles: list[Vehicle]|None = None,
+        obstacles: Sequence[Obstacle]|None = None,
+        np_random: np.random.RandomState|None = None,
         record_history: bool = False,
     ) -> None:
         super().__init__(network, vehicles, obstacles, np_random, record_history)
@@ -79,8 +82,8 @@ class RegulatedRoad(Road):
 
     @staticmethod
     def is_conflict_possible(
-        v1: ControlledVehicle,
-        v2: ControlledVehicle,
+        v1: Vehicle,
+        v2: Vehicle,
         horizon: int = 3,
         step: float = 0.25,
     ) -> bool:
@@ -101,3 +104,5 @@ class RegulatedRoad(Road):
                 (position_2, 1.5 * v2.LENGTH, 0.9 * v2.WIDTH, heading_2),
             ):
                 return True
+
+        return False

@@ -3,30 +3,43 @@ from __future__ import annotations
 import copy
 import importlib
 import itertools
-from typing import Callable, List, Sequence, Tuple, Union
+from collections.abc import Callable
+from typing import TypedDict
 
 import numpy as np
+from git import TYPE_CHECKING
+from numpy.typing import NDArray
 
 
 # Useful types
-Vector = Union[np.ndarray, Sequence[float]]
-Matrix = Union[np.ndarray, Sequence[Sequence[float]]]
-Interval = Union[
-    np.ndarray,
-    Tuple[Vector, Vector],
-    Tuple[Matrix, Matrix],
-    Tuple[float, float],
-    List[Vector],
-    List[Matrix],
-    List[float],
-]
+# Vector = NDArray[np.float64]|  Sequence[float]
+# Matrix = NDArray[np.float64]|Sequence[Sequence[float]]
+# Interval =NDArray[np.float64]|tuple[Vector, Vector]|tuple[Matrix, Matrix]|tuple[float, float]|list[Vector]|list[Matrix]|list[float]
 
+# TODO  we should try use numpy.typing to specify vector and matrix like below:
+Vector = np.ndarray[tuple[int], np.dtype[np.floating]]
+Matrix = np.ndarray[tuple[int, int], np.dtype[np.floating]]
+Interval =np.ndarray[tuple[int, int], np.dtype[np.floating]] | np.ndarray[tuple[int, int,int], np.dtype[np.floating]]
+
+class ActionDict(TypedDict):
+    """A dictionary representation of an action, for use in MultiAgentAction."""
+
+    acceleration: float
+    """the acceleration to apply, range in [-1,1],
+
+    mapped to the acceleration range defined in `ContinuousAction.acceleration_range`
+    """
+    steering: float
+    """the steering angle to apply, range in [-1,1],
+
+    mapped to the steering range defined in `ContinuousAction.steering_range`
+    """
 
 def do_every(duration: float, timer: float) -> bool:
     return duration < timer
 
 
-def lmap(v: float, x: Interval, y: Interval) -> float:
+def lmap(v: float, x:Interval, y: Interval) -> float:
     """Linear map of value v with range x to desired range y."""
     return y[0] + (v - x[0]) * (y[1] - y[0]) / (x[1] - x[0])
 
@@ -41,7 +54,7 @@ def class_from_path(path: str) -> Callable:
     return class_object
 
 
-def constrain(x: float, a: float, b: float) -> np.ndarray:
+def constrain(x: float, a: float, b: float) -> NDArray[np.float64]:
     return np.clip(x, a, b)
 
 
@@ -73,7 +86,7 @@ def point_in_rectangle(point: Vector, rect_min: Vector, rect_max: Vector) -> boo
 
 
 def point_in_rotated_rectangle(
-    point: np.ndarray, center: np.ndarray, length: float, width: float, angle: float
+    point: Vector, center: Vector, length: float, width: float, angle: float
 ) -> bool:
     """
     Check if a point is inside a rotated rectangle
@@ -88,7 +101,7 @@ def point_in_rotated_rectangle(
     c, s = np.cos(angle), np.sin(angle)
     r = np.array([[c, -s], [s, c]])
     ru = r.dot(point - center)
-    return point_in_rectangle(ru, (-length / 2, -width / 2), (length / 2, width / 2))
+    return point_in_rectangle(ru, np.array([-length / 2, -width / 2]), np.array([length / 2, width / 2]))
 
 
 def point_in_ellipse(
@@ -124,13 +137,13 @@ def rotated_rectangles_intersect(
 
 
 def rect_corners(
-    center: np.ndarray,
+    center: Vector,
     length: float,
     width: float,
     angle: float,
     include_midpoints: bool = False,
     include_center: bool = False,
-) -> list[np.ndarray]:
+) -> Matrix:
     """
     Returns the positions of the corners of a rectangle.
     :param center: the rectangle center
@@ -172,18 +185,20 @@ def has_corner_inside(
     )
 
 
-def project_polygon(polygon: Vector, axis: Vector) -> tuple[float, float]:
+def project_polygon(polygon: Matrix, axis: Matrix) -> tuple[float, float]:
     min_p, max_p = None, None
     for p in polygon:
-        projected = p.dot(axis)
+        if TYPE_CHECKING:
+            assert isinstance(p, np.ndarray)
+        projected:float = p.dot(axis)
         if min_p is None or projected < min_p:
             min_p = projected
         if max_p is None or projected > max_p:
             max_p = projected
-    return min_p, max_p
+    return min_p, max_p # type: ignore
 
 
-def interval_distance(min_a: float, max_a: float, min_b: float, max_b: float):
+def interval_distance(min_a: float, max_a: float, min_b: float, max_b: float)->float:
     """
     Calculate the distance between [minA, maxA] and [minB, maxB]
     The distance will be negative if the intervals overlap
@@ -192,8 +207,8 @@ def interval_distance(min_a: float, max_a: float, min_b: float, max_b: float):
 
 
 def are_polygons_intersecting(
-    a: Vector, b: Vector, displacement_a: Vector, displacement_b: Vector
-) -> tuple[bool, bool, np.ndarray | None]:
+    a: Matrix, b: Matrix, displacement_a: Vector, displacement_b: Vector
+) -> tuple[bool, bool, NDArray[np.float64] | None]:
     """
     Checks if the two polygons are intersecting.
 
@@ -207,7 +222,7 @@ def are_polygons_intersecting(
     """
     intersecting = will_intersect = True
     min_distance = np.inf
-    translation, translation_axis = None, None
+    translation, translation_axis = None, None # type: ignore
     for polygon in [a, b]:
         for p1, p2 in zip(polygon, polygon[1:]):
             normal = np.array([-p2[1] + p1[1], p2[0] - p1[0]])
@@ -231,8 +246,8 @@ def are_polygons_intersecting(
                 break
             if abs(distance) < min_distance:
                 min_distance = abs(distance)
-                d = a[:-1].mean(axis=0) - b[:-1].mean(axis=0)  # center difference
-                translation_axis = normal if d.dot(normal) > 0 else -normal
+                d:np.ndarray = a[:-1].mean(axis=0) - b[:-1].mean(axis=0)  # center difference
+                translation_axis:np.ndarray = normal if d.dot(normal) > 0 else -normal
 
     if will_intersect:
         translation = min_distance * translation_axis
@@ -240,12 +255,12 @@ def are_polygons_intersecting(
 
 
 def confidence_ellipsoid(
-    data: dict[str, np.ndarray],
+    data: dict[str, NDArray[np.float64]],
     lambda_: float = 1e-5,
     delta: float = 0.1,
     sigma: float = 0.1,
     param_bound: float = 1.0,
-) -> tuple[np.ndarray, np.ndarray, float]:
+) -> tuple[NDArray[np.float64], NDArray[np.float64], float]:
     """
     Compute a confidence ellipsoid over the parameter theta, where y = theta^T phi
 
@@ -271,8 +286,8 @@ def confidence_ellipsoid(
 
 
 def confidence_polytope(
-    data: dict, parameter_box: np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+    data: dict, parameter_box: NDArray[np.float64]
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], float]:
     """
     Compute a confidence polytope over the parameter theta, where y = theta^T phi
 
@@ -302,10 +317,10 @@ def confidence_polytope(
 
 
 def is_valid_observation(
-    y: np.ndarray,
-    phi: np.ndarray,
-    theta: np.ndarray,
-    gramian: np.ndarray,
+    y: NDArray[np.float64],
+    phi: NDArray[np.float64],
+    theta: NDArray[np.float64],
+    gramian: NDArray[np.float64],
     beta: float,
     sigma: float = 0.1,
 ) -> bool:
@@ -320,7 +335,7 @@ def is_valid_observation(
     :param sigma: noise covariance
     :return: validity of the observation
     """
-    y_hat = np.tensordot(theta, phi, axes=[0, 0])
+    y_hat = np.tensordot(theta, phi, axes=(0, 0))
     error = np.linalg.norm(y - y_hat)
     eig_phi, _ = np.linalg.eig(phi.transpose() @ phi)
     eig_g, _ = np.linalg.eig(gramian)
@@ -328,7 +343,7 @@ def is_valid_observation(
     return error < error_bound
 
 
-def is_consistent_dataset(data: dict, parameter_box: np.ndarray = None) -> bool:
+def is_consistent_dataset(data: dict, parameter_box: NDArray[np.float64]) -> bool:
     """
     Check whether a dataset {phi_n, y_n} is consistent
 
@@ -379,11 +394,11 @@ def distance_to_circle(center, radius, direction):
     elif root_sup and root_sup > 0:
         distance = 0
     else:
-        distance = np.infty
+        distance = np.inf
     return distance
 
 
-def distance_to_rect(line: tuple[np.ndarray, np.ndarray], rect: list[np.ndarray]):
+def distance_to_rect(line: tuple[Vector, Vector], rect: list[Vector]):
     """
     Compute the intersection between a line segment and a rectangle.
 
@@ -400,8 +415,8 @@ def distance_to_rect(line: tuple[np.ndarray, np.ndarray], rect: list[np.ndarray]
     rqu = (q - r) @ u
     rqv = (q - r) @ v
     with np.errstate(divide="ignore", invalid="ignore"):
-        interval_1 = [(a - r) @ u / rqu, (b - r) @ u / rqu]
-        interval_2 = [(a - r) @ v / rqv, (d - r) @ v / rqv]
+        interval_1:list[float] = [(a - r) @ u / rqu, (b - r) @ u / rqu]  # type: ignore
+        interval_2:list[float] = [(a - r) @ v / rqv, (d - r) @ v / rqv]  # type: ignore
     interval_1 = interval_1 if rqu >= 0 else list(reversed(interval_1))
     interval_2 = interval_2 if rqv >= 0 else list(reversed(interval_2))
     if (

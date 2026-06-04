@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.typing import NDArray
 
 from highway_env.road.road import Road
 from highway_env.utils import Vector
 from highway_env.vehicle.kinematics import Vehicle
 
 
-def rk4(func: Callable, state: np.ndarray, dt: float = 0.01, t: float = 0, **kwargs):
+def rk4(func: Callable[[float, NDArray[np.float32]], NDArray[np.float32]], state: NDArray[np.float32], dt: float = 0.01, t: float = 0, **kwargs) -> NDArray[np.float32]:
     """
     single-step fourth-order numerical integration (RK4) method
     func: system of first order ODEs
@@ -46,7 +47,7 @@ class BicycleVehicle(Vehicle):
     MAX_ANGULAR_SPEED: float = 2 * np.pi  # [rad/s]
 
     def __init__(
-        self, road: Road, position: Vector, heading: float = 0, speed: float = 0
+        self, road: Road | None, position: Vector, heading: float = 0, speed: float = 0
     ) -> None:
         super().__init__(road, position, heading, speed)
         self.lateral_speed = 0
@@ -55,7 +56,7 @@ class BicycleVehicle(Vehicle):
         self.A_lat, self.B_lat = self.lateral_lpv_dynamics()
 
     @property
-    def state(self) -> np.ndarray:
+    def state(self) -> NDArray[np.float32]:
         return np.array(
             [
                 [self.position[0]],
@@ -71,7 +72,7 @@ class BicycleVehicle(Vehicle):
     def derivative(self):
         return self.derivative_func(None, self.state)
 
-    def derivative_func(self, time: float, state: np.ndarray, **kwargs) -> np.ndarray:
+    def derivative_func(self, time: float | None, state: NDArray[np.float32], **kwargs) -> NDArray[np.float32]:
         """
         See Chapter 2 of Lateral Vehicle Dynamics. Vehicle Dynamics and Control. Rajamani, R. (2011)
 
@@ -111,7 +112,7 @@ class BicycleVehicle(Vehicle):
         )
 
     @property
-    def derivative_linear(self) -> np.ndarray:
+    def derivative_linear(self) -> NDArray[np.float32]:
         """
         Linearized lateral dynamics.
 
@@ -160,7 +161,7 @@ class BicycleVehicle(Vehicle):
             self.yaw_rate, -self.MAX_ANGULAR_SPEED, self.MAX_ANGULAR_SPEED
         )
 
-    def lateral_lpv_structure(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def lateral_lpv_structure(self) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.float32]]:
         """
         State: [lateral speed v, yaw rate r]
 
@@ -205,7 +206,7 @@ class BicycleVehicle(Vehicle):
         )
         return A0, phi, B
 
-    def lateral_lpv_dynamics(self) -> tuple[np.ndarray, np.ndarray]:
+    def lateral_lpv_dynamics(self) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
         """
         State: [lateral speed v, yaw rate r]
 
@@ -213,10 +214,10 @@ class BicycleVehicle(Vehicle):
         """
         A0, phi, B = self.lateral_lpv_structure()
         self.theta = np.array([self.FRICTION_FRONT, self.FRICTION_REAR])
-        A = A0 + np.tensordot(self.theta, phi, axes=[0, 0])
+        A = A0 + np.tensordot(self.theta, phi, axes=(0, 0))
         return A, B
 
-    def full_lateral_lpv_structure(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def full_lateral_lpv_structure(self) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.float32]]:
         """
         State: [position y, yaw psi, lateral speed v, yaw rate r]
 
@@ -243,7 +244,7 @@ class BicycleVehicle(Vehicle):
         B = np.concatenate((np.zeros((2, 1)), B_lat))
         return A0, phi, B
 
-    def full_lateral_lpv_dynamics(self) -> tuple[np.ndarray, np.ndarray]:
+    def full_lateral_lpv_dynamics(self) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
         """
         State: [position y, yaw psi, lateral speed v, yaw rate r]
 
@@ -253,15 +254,16 @@ class BicycleVehicle(Vehicle):
         """
         A0, phi, B = self.full_lateral_lpv_structure()
         self.theta = [self.FRICTION_FRONT, self.FRICTION_REAR]
-        A = A0 + np.tensordot(self.theta, phi, axes=[0, 0])
+        A = A0 + np.tensordot(self.theta, phi, axes=(0, 0))
         return A, B
 
 
 def simulate(dt: float = 0.1) -> None:
-    import control
+    # BUG I could not find the control module. It seems that it should be added to the repository.
+    import control  # pyright: ignore[reportMissingImports] # pylint: disable=import-error
 
     time = np.arange(0, 20, dt)
-    vehicle = BicycleVehicle(road=None, position=[0, 5], speed=8.3)
+    vehicle = BicycleVehicle(road=None, position=np.array([0, 5]), speed=8.3)
     xx, uu = [], []
     from highway_env.interval import LPV
 
@@ -270,10 +272,10 @@ def simulate(dt: float = 0.1) -> None:
     lpv = LPV(
         x0=vehicle.state[[1, 2, 4, 5]].squeeze(),
         a0=A,
-        da=[np.zeros(A.shape)],
+        da=[np.zeros_like(A)],
         b=B,
-        d=[[0], [0], [0], [1]],
-        omega_i=[[0], [0]],
+        d=np.array([[0], [0], [0], [1]]),
+        omega_i=np.array([[0], [0]]),
         u=None,
         k=K,
         center=None,
@@ -298,14 +300,14 @@ def simulate(dt: float = 0.1) -> None:
         lpv.step(dt)
         # x_i_t = lpv.change_coordinates(lpv.x_i_t, back=True, interval=True)
         # Step
-        vehicle.act({"acceleration": 0, "steering": u})
+        vehicle.act({"acceleration": 0, "steering": u})  # type: ignore
         vehicle.step(dt)
 
     xx, uu = np.array(xx), np.array(uu)
     plot(time, xx, uu)
 
 
-def plot(time: np.ndarray, xx: np.ndarray, uu: np.ndarray) -> None:
+def plot(time: NDArray[np.float32], xx: NDArray[np.float32], uu: NDArray[np.float32]) -> None:
     pos_x, pos_y = xx[:, 0, 0], xx[:, 1, 0]
     psi_x, psi_y = np.cos(xx[:, 2, 0]), np.sin(xx[:, 2, 0])
     dir_x, dir_y = np.cos(xx[:, 2, 0] + uu[:, 0, 0]), np.sin(xx[:, 2, 0] + uu[:, 0, 0])

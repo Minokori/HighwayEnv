@@ -13,6 +13,7 @@ from highway_env.envs.common.finite_mdp import compute_ttc_grid
 from highway_env.envs.common.graphics import EnvViewer
 from highway_env.road.lane import AbstractLane
 from highway_env.utils import Vector
+from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
 
@@ -21,9 +22,9 @@ if TYPE_CHECKING:
 
 
 class ObservationType:
-    def __init__(self, env: AbstractEnv, **kwargs) -> None:
-        self.env = env
-        self.__observer_vehicle = None
+    def __init__(self, env: "AbstractEnv", **kwargs) -> None:
+        self.env:"AbstractEnv" = env
+        self.__observer_vehicle:Vehicle|None = None
 
     def space(self) -> spaces.Space:
         """Get the observation space."""
@@ -34,16 +35,16 @@ class ObservationType:
         raise NotImplementedError()
 
     @property
-    def observer_vehicle(self):
+    def observer_vehicle(self)->MDPVehicle:
         """
         The vehicle observing the scene.
 
         If not set, the first controlled vehicle is used by default.
         """
-        return self.__observer_vehicle or self.env.vehicle
+        return self.__observer_vehicle or self.env.vehicle # type: ignore
 
     @observer_vehicle.setter
-    def observer_vehicle(self, vehicle):
+    def observer_vehicle(self, vehicle: Vehicle):
         self.__observer_vehicle = vehicle
 
 
@@ -75,10 +76,10 @@ class GrayscaleObservation(ObservationType):
         **kwargs,
     ) -> None:
         super().__init__(env)
-        self.observation_shape = observation_shape
-        self.shape = (stack_size,) + self.observation_shape
-        self.weights = weights
-        self.obs = np.zeros(self.shape, dtype=np.uint8)
+        self.observation_shape:tuple[int,int] = observation_shape
+        self.shape:tuple[int, int,int] = (stack_size,) + self.observation_shape
+        self.weights:list[float] = weights
+        self.obs:np.ndarray[tuple[int,int,int],np.dtype[np.uint8]] = np.zeros(self.shape, dtype=np.uint8)
 
         # The viewer configuration can be different between this observation and env.render() (typically smaller)
         viewer_config = env.config.copy()
@@ -92,7 +93,7 @@ class GrayscaleObservation(ObservationType):
                 or viewer_config["centering_position"],
             }
         )
-        self.viewer = EnvViewer(env, config=viewer_config)
+        self.viewer:EnvViewer = EnvViewer(env, config=viewer_config)
 
     def space(self) -> spaces.Space:
         return spaces.Box(shape=self.shape, low=0, high=255, dtype=np.uint8)
@@ -159,9 +160,9 @@ class KinematicObservation(ObservationType):
     def __init__(
         self,
         env: AbstractEnv,
-        features: list[str] = None,
+        features: list[str]|None = None,
         vehicles_count: int = 5,
-        features_range: dict[str, list[float]] = None,
+        features_range: dict[str, list[float]]|None = None,
         absolute: bool = False,
         order: str = "sorted",
         normalize: bool = True,
@@ -195,13 +196,13 @@ class KinematicObservation(ObservationType):
         self.observe_intentions = observe_intentions
         self.include_obstacles = include_obstacles
 
-    def space(self) -> spaces.Space:
+    def space(self) -> spaces.Box:
         return spaces.Box(
             shape=(self.vehicles_count, len(self.features)),
             low=-np.inf,
             high=np.inf,
             dtype=np.float32,
-        )
+        )# type: ignore
 
     def normalize_obs(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -288,7 +289,7 @@ class OccupancyGridObservation(ObservationType):
         features: list[str] | None = None,
         grid_size: tuple[tuple[float, float], tuple[float, float]] | None = None,
         grid_step: tuple[float, float] | None = None,
-        features_range: dict[str, list[float]] = None,
+        features_range: dict[str, list[float]]|None = None,
         absolute: bool = False,
         align_to_vehicle_axes: bool = False,
         clip: bool = True,
@@ -318,14 +319,14 @@ class OccupancyGridObservation(ObservationType):
             np.floor((self.grid_size[:, 1] - self.grid_size[:, 0]) / self.grid_step),
             dtype=np.uint8,
         )
-        self.grid = np.zeros((len(self.features), *grid_shape))
+        self.grid:np.ndarray = np.zeros((len(self.features), *grid_shape))
         self.features_range = features_range
         self.absolute = absolute
         self.align_to_vehicle_axes = align_to_vehicle_axes
         self.clip = clip
         self.as_image = as_image
 
-    def space(self) -> spaces.Space:
+    def space(self) -> spaces.Box:
         if self.as_image:
             return spaces.Box(shape=self.grid.shape, low=0, high=255, dtype=np.uint8)
         else:
@@ -499,7 +500,7 @@ class OccupancyGridObservation(ObservationType):
 
 
 class KinematicsGoalObservation(KinematicObservation):
-    def __init__(self, env: AbstractEnv, scales: list[float], **kwargs: dict) -> None:
+    def __init__(self, env: AbstractEnv, scales: list[float], **kwargs) -> None:
         self.scales = np.array(scales)
         super().__init__(env, **kwargs)
 
@@ -512,19 +513,19 @@ class KinematicsGoalObservation(KinematicObservation):
                         -np.inf,
                         np.inf,
                         shape=obs["desired_goal"].shape,
-                        dtype=np.float64,
+                        dtype=np.float32,
                     ),
                     achieved_goal=spaces.Box(
                         -np.inf,
                         np.inf,
                         shape=obs["achieved_goal"].shape,
-                        dtype=np.float64,
+                        dtype=np.float32,
                     ),
                     observation=spaces.Box(
                         -np.inf,
                         np.inf,
                         shape=obs["observation"].shape,
-                        dtype=np.float64,
+                        dtype=np.float32,
                     ),
                 )
             )
@@ -570,7 +571,7 @@ class AttributesObservation(ObservationType):
             return spaces.Dict(
                 {
                     attribute: spaces.Box(
-                        -np.inf, np.inf, shape=obs[attribute].shape, dtype=np.float64
+                        -np.inf, np.inf, shape=obs[attribute].shape, dtype=np.float32
                     )
                     for attribute in self.attributes
                 }
@@ -744,7 +745,7 @@ class LidarObservation(ObservationType):
 
             # Actual distance computation for these sections
             for index in indexes:
-                direction = self.index_to_direction(index)
+                direction = self.index_to_direction(int(index))
                 ray = [origin, origin + self.maximum_range * direction]
                 distance = utils.distance_to_rect(ray, corners)
                 if distance <= self.grid[index, self.DISTANCE]:

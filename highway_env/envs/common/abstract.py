@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import copy
 import os
-from typing import TypeVar
+from typing import NotRequired, TypedDict, TypeVar
 
 import gymnasium as gym
+from highway_env.road.road import Road
 import numpy as np
 from gymnasium import Wrapper
 from gymnasium.utils import RecordConstructorArgs
@@ -16,12 +17,40 @@ from highway_env.envs.common.finite_mdp import finite_mdp
 from highway_env.envs.common.graphics import EnvViewer
 from highway_env.envs.common.observation import ObservationType, observation_factory
 from highway_env.vehicle.behavior import IDMVehicle
+from highway_env.vehicle.controller import ControlledVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
 
 Observation = TypeVar("Observation")
 
+class EnvironmentConfig(TypedDict):
+    observation: dict
+    action: dict
+    simulation_frequency: int
+    """[Hz] Frequency of the simulation loop"""
+    policy_frequency: int
+    """[Hz] Frequency of the decision making loop"""
+    other_vehicles_type: str
+    """The type of behavior of other vehicles, specified as the path of the class of behavior"""
+    screen_width: int
+    """[px] The width of the rendered screen"""
+    screen_height: int
+    """[px] The height of the rendered screen"""
+    centering_position: list[float]
+    scaling: float
+    show_trajectories: bool
+    render_agent: bool
+    offscreen_rendering: bool
+    manual_control: bool
+    real_time_rendering: bool
 
+
+
+class Infomation(TypedDict):
+    speed: float
+    crashed: bool
+    action: Action|None
+    rewards: NotRequired[dict[str, float]]
 class AbstractEnv(gym.Env):
     """
     A generic environment for various tasks involving a vehicle driving on a road.
@@ -41,7 +70,7 @@ class AbstractEnv(gym.Env):
     PERCEPTION_DISTANCE = 5.0 * Vehicle.MAX_SPEED
     """The maximum distance of any vehicle present in the observation [m]"""
 
-    def __init__(self, config: dict = None, render_mode: str | None = None) -> None:
+    def __init__(self, config: EnvironmentConfig|None = None, render_mode: str | None = None) -> None:
         super().__init__()
 
         # Configuration
@@ -49,14 +78,16 @@ class AbstractEnv(gym.Env):
         self.configure(config)
 
         # Scene
-        self.road = None
+        self.road:Road = None # type: ignore
         self.controlled_vehicles = []
 
         # Spaces
-        self.action_type = None
-        self.action_space = None
-        self.observation_type = None
-        self.observation_space = None
+        self.action_type= None# type: ignore
+        self.action_space = None # type: ignore
+        self.observation_type = None # type: ignore
+        self.observation_space = None # type: ignore
+
+        # after define_spaces() is called, None values should have been replaced by actual spaces and types
         self.define_spaces()
 
         # Running
@@ -65,7 +96,7 @@ class AbstractEnv(gym.Env):
         self.done = False
 
         # Rendering
-        self.viewer = None
+        self.viewer:EnvViewer|None = None
         self._record_video_wrapper = None
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -74,17 +105,18 @@ class AbstractEnv(gym.Env):
         self.reset()
 
     @property
-    def vehicle(self) -> Vehicle:
+    def vehicle(self) -> ControlledVehicle:
         """First (default) controlled vehicle."""
-        return self.controlled_vehicles[0] if self.controlled_vehicles else None
+        # TODO: this shouldn't be None in runtime
+        return self.controlled_vehicles[0] if self.controlled_vehicles else None # type: ignore
 
     @vehicle.setter
-    def vehicle(self, vehicle: Vehicle) -> None:
+    def vehicle(self, vehicle: ControlledVehicle) -> None:
         """Set a unique controlled vehicle."""
         self.controlled_vehicles = [vehicle]
 
     @classmethod
-    def default_config(cls) -> dict:
+    def default_config(cls) -> EnvironmentConfig:
         """
         Default environment configuration.
 
@@ -108,7 +140,7 @@ class AbstractEnv(gym.Env):
             "real_time_rendering": False,
         }
 
-    def configure(self, config: dict) -> None:
+    def configure(self, config: EnvironmentConfig|None) -> None:
         if config:
             self.config.update(config)
 
@@ -138,7 +170,7 @@ class AbstractEnv(gym.Env):
         """
         raise NotImplementedError
 
-    def _rewards(self, action: Action) -> dict[str, float]:
+    def _rewards(self, action: Action|None) -> dict[str, float]:
         """
         Returns a multi-objective vector of rewards.
 
@@ -166,7 +198,7 @@ class AbstractEnv(gym.Env):
         """
         raise NotImplementedError
 
-    def _info(self, obs: Observation, action: Action | None = None) -> dict:
+    def _info(self, obs: Observation, action: Action | None = None) -> Infomation:
         """
         Return a dictionary of additional information
 
@@ -174,11 +206,11 @@ class AbstractEnv(gym.Env):
         :param action: current action
         :return: info dict
         """
-        info = {
-            "speed": self.vehicle.speed,
-            "crashed": self.vehicle.crashed,
-            "action": action,
-        }
+        info = Infomation(
+            speed=self.vehicle.speed,
+            crashed=self.vehicle.crashed,
+            action=action,
+        )
         try:
             info["rewards"] = self._rewards(action)
         except NotImplementedError:
@@ -190,7 +222,7 @@ class AbstractEnv(gym.Env):
         *,
         seed: int | None = None,
         options: dict | None = None,
-    ) -> tuple[Observation, dict]:
+    ) -> tuple[Observation, Infomation]:
         """
         Reset the environment to it's initial configuration
 
@@ -221,7 +253,7 @@ class AbstractEnv(gym.Env):
         """
         raise NotImplementedError()
 
-    def step(self, action: Action) -> tuple[Observation, float, bool, bool, dict]:
+    def step(self, action: Action) -> tuple[Observation, float, bool, bool, Infomation]:
         """
         Perform an action and step the environment dynamics.
 
@@ -374,7 +406,7 @@ class AbstractEnv(gym.Env):
                 vehicles[i] = vehicle_class.create_from(v)
         return env_copy
 
-    def set_preferred_lane(self, preferred_lane: int = None) -> AbstractEnv:
+    def set_preferred_lane(self, preferred_lane: int|None = None) -> AbstractEnv:
         env_copy = copy.deepcopy(self)
         if preferred_lane:
             for v in env_copy.road.vehicles:
@@ -384,7 +416,7 @@ class AbstractEnv(gym.Env):
                     v.LANE_CHANGE_MAX_BRAKING_IMPOSED = 1000
         return env_copy
 
-    def set_route_at_intersection(self, _to: str) -> AbstractEnv:
+    def set_route_at_intersection(self, _to: int) -> AbstractEnv:
         env_copy = copy.deepcopy(self)
         for v in env_copy.road.vehicles:
             if isinstance(v, IDMVehicle):
