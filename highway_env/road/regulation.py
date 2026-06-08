@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import numpy as np
-from numpy.typing import NDArray
 from highway_env import utils
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.vehicle.controller import ControlledVehicle, MDPVehicle

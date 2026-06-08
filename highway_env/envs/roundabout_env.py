@@ -3,16 +3,26 @@ from __future__ import annotations
 import numpy as np
 
 from highway_env import utils
-from highway_env.envs.common.abstract import AbstractEnv
+from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
 from highway_env.road.lane import CircularLane, LineType, SineLane, StraightLane
 from highway_env.road.road import Road, RoadNetwork
+from highway_env.vehicle.behavior import IDMVehicle
 from highway_env.vehicle.controller import MDPVehicle
 
 
+class RoundaboutEnvConfig(EnvironmentConfig):
+    incoming_vehicle_destination: int|None
+    collision_reward: float
+    high_speed_reward: float
+    right_lane_reward: float
+    lane_change_reward: float
+    duration:int
+    normalize_reward: bool
+
 class RoundaboutEnv(AbstractEnv):
     @classmethod
-    def default_config(cls) -> dict:
-        config = super().default_config()
+    def default_config(cls) -> RoundaboutEnvConfig:
+        config:RoundaboutEnvConfig = super().default_config() # type: ignore
         config.update(
             {
                 "observation": {
@@ -48,8 +58,8 @@ class RoundaboutEnv(AbstractEnv):
         if self.config["normalize_reward"]:
             reward = utils.lmap(
                 reward,
-                [self.config["collision_reward"], self.config["high_speed_reward"]],
-                [0, 1],
+                np.array([self.config["collision_reward"], self.config["high_speed_reward"]]),
+                np.array([0, 1]),
             )
         reward *= rewards["on_road_reward"]
         return reward
@@ -75,14 +85,14 @@ class RoundaboutEnv(AbstractEnv):
 
     def _make_road(self) -> None:
         # Circle lanes: (s)outh/(e)ast/(n)orth/(w)est (e)ntry/e(x)it.
-        center = [0, 0]  # [m]
+        center = np.array([0, 0])  # [m]
         radius = 20  # [m]
         alpha = 24  # [deg]
 
         net = RoadNetwork()
         radii = [radius, radius + 4]
         n, c, s = LineType.NONE, LineType.CONTINUOUS, LineType.STRIPED
-        line = [[c, s], [n, c]]
+        line: list[tuple[LineType,LineType]] = [(c, s), (n, c)]
         for lane in [0, 1]:
             net.add_lane(
                 "se",
@@ -190,14 +200,14 @@ class RoundaboutEnv(AbstractEnv):
         delta_en = dev - delta_st
         w = 2 * np.pi / dev
         net.add_lane(
-            "ser", "ses", StraightLane([2, access], [2, dev / 2], line_types=(s, c))
+            "ser", "ses", StraightLane(np.array([2, access]), np.array([2, dev / 2]), line_types=(s, c))
         )
         net.add_lane(
             "ses",
             "se",
             SineLane(
-                [2 + a, dev / 2],
-                [2 + a, dev / 2 - delta_st],
+                np.array([2 + a, dev / 2]),
+                np.array([2 + a, dev / 2 - delta_st]),
                 a,
                 w,
                 -np.pi / 2,
@@ -208,8 +218,8 @@ class RoundaboutEnv(AbstractEnv):
             "sx",
             "sxs",
             SineLane(
-                [-2 - a, -dev / 2 + delta_en],
-                [-2 - a, dev / 2],
+                np.array([-2 - a, -dev / 2 + delta_en]),
+                np.array([-2 - a, dev / 2]),
                 a,
                 w,
                 -np.pi / 2 + w * delta_en,
@@ -217,18 +227,18 @@ class RoundaboutEnv(AbstractEnv):
             ),
         )
         net.add_lane(
-            "sxs", "sxr", StraightLane([-2, dev / 2], [-2, access], line_types=(n, c))
+            "sxs", "sxr", StraightLane(np.array([-2, dev / 2]), np.array([-2, access]), line_types=(n, c))
         )
 
         net.add_lane(
-            "eer", "ees", StraightLane([access, -2], [dev / 2, -2], line_types=(s, c))
+            "eer", "ees", StraightLane(np.array([access, -2]), np.array([dev / 2, -2]), line_types=(s, c))
         )
         net.add_lane(
             "ees",
             "ee",
             SineLane(
-                [dev / 2, -2 - a],
-                [dev / 2 - delta_st, -2 - a],
+                np.array([dev / 2, -2 - a]),
+                np.array([dev / 2 - delta_st, -2 - a]),
                 a,
                 w,
                 -np.pi / 2,
@@ -239,8 +249,8 @@ class RoundaboutEnv(AbstractEnv):
             "ex",
             "exs",
             SineLane(
-                [-dev / 2 + delta_en, 2 + a],
-                [dev / 2, 2 + a],
+                np.array([-dev / 2 + delta_en, 2 + a]),
+                np.array([dev / 2, 2 + a]),
                 a,
                 w,
                 -np.pi / 2 + w * delta_en,
@@ -248,18 +258,18 @@ class RoundaboutEnv(AbstractEnv):
             ),
         )
         net.add_lane(
-            "exs", "exr", StraightLane([dev / 2, 2], [access, 2], line_types=(n, c))
+            "exs", "exr", StraightLane(np.array([dev / 2, 2]), np.array([access, 2]), line_types=(n, c))
         )
 
         net.add_lane(
-            "ner", "nes", StraightLane([-2, -access], [-2, -dev / 2], line_types=(s, c))
+            "ner", "nes", StraightLane(np.array([-2, -access]), np.array([-2, -dev / 2]), line_types=(s, c))
         )
         net.add_lane(
             "nes",
             "ne",
             SineLane(
-                [-2 - a, -dev / 2],
-                [-2 - a, -dev / 2 + delta_st],
+                np.array([-2 - a, -dev / 2]),
+                np.array([-2 - a, -dev / 2 + delta_st]),
                 a,
                 w,
                 -np.pi / 2,
@@ -270,8 +280,8 @@ class RoundaboutEnv(AbstractEnv):
             "nx",
             "nxs",
             SineLane(
-                [2 + a, dev / 2 - delta_en],
-                [2 + a, -dev / 2],
+                np.array([2 + a, dev / 2 - delta_en]),
+                np.array([2 + a, -dev / 2]),
                 a,
                 w,
                 -np.pi / 2 + w * delta_en,
@@ -279,18 +289,18 @@ class RoundaboutEnv(AbstractEnv):
             ),
         )
         net.add_lane(
-            "nxs", "nxr", StraightLane([2, -dev / 2], [2, -access], line_types=(n, c))
+            "nxs", "nxr", StraightLane(np.array([2, -dev / 2]), np.array([2, -access]), line_types=(n, c))
         )
 
         net.add_lane(
-            "wer", "wes", StraightLane([-access, 2], [-dev / 2, 2], line_types=(s, c))
+            "wer", "wes", StraightLane(np.array([-access, 2]), np.array([-dev / 2, 2]), line_types=(s, c))
         )
         net.add_lane(
             "wes",
             "we",
             SineLane(
-                [-dev / 2, 2 + a],
-                [-dev / 2 + delta_st, 2 + a],
+                np.array([-dev / 2, 2 + a]),
+                np.array([-dev / 2 + delta_st, 2 + a]),
                 a,
                 w,
                 -np.pi / 2,
@@ -301,8 +311,8 @@ class RoundaboutEnv(AbstractEnv):
             "wx",
             "wxs",
             SineLane(
-                [dev / 2 - delta_en, -2 - a],
-                [-dev / 2, -2 - a],
+                np.array([dev / 2 - delta_en, -2 - a]),
+                np.array([-dev / 2, -2 - a]),
                 a,
                 w,
                 -np.pi / 2 + w * delta_en,
@@ -310,7 +320,7 @@ class RoundaboutEnv(AbstractEnv):
             ),
         )
         net.add_lane(
-            "wxs", "wxr", StraightLane([-dev / 2, -2], [-access, -2], line_types=(n, c))
+            "wxs", "wxr", StraightLane(np.array([-dev / 2, -2]), np.array([-access, -2]), line_types=(n, c))
         )
 
         road = Road(
@@ -331,12 +341,12 @@ class RoundaboutEnv(AbstractEnv):
 
         # Ego-vehicle
         ego_lane = self.road.network.get_lane(("ser", "ses", 0))
-        ego_vehicle = self.action_type.vehicle_class(
+        ego_vehicle:MDPVehicle = self.action_type.vehicle_class(
             self.road,
             ego_lane.position(125.0, 0.0),
             speed=8.0,
             heading=ego_lane.heading_at(140.0),
-        )
+        ) # type: ignore
         try:
             ego_vehicle.plan_route_to("nxs")
         except AttributeError:
@@ -347,12 +357,12 @@ class RoundaboutEnv(AbstractEnv):
         # Incoming vehicle
         destinations = ["exr", "sxr", "nxr"]
         other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
-        vehicle = other_vehicles_type.make_on_lane(
+        vehicle:IDMVehicle = other_vehicles_type.make_on_lane(
             self.road,
             ("we", "sx", 1),
             longitudinal=5.0 + self.np_random.normal() * position_deviation,
             speed=16 + self.np_random.normal() * speed_deviation,
-        )
+        ) # type: ignore
 
         if self.config["incoming_vehicle_destination"] is not None:
             destination = destinations[self.config["incoming_vehicle_destination"]]
@@ -370,7 +380,7 @@ class RoundaboutEnv(AbstractEnv):
                 longitudinal=20.0 * float(i)
                 + self.np_random.normal() * position_deviation,
                 speed=16.0 + self.np_random.normal() * speed_deviation,
-            )
+            ) # type: ignore
             vehicle.plan_route_to(self.np_random.choice(destinations))
             vehicle.randomize_behavior()
             self.road.vehicles.append(vehicle)
@@ -381,11 +391,16 @@ class RoundaboutEnv(AbstractEnv):
             ("eer", "ees", 0),
             longitudinal=50.0 + self.np_random.normal() * position_deviation,
             speed=16.0 + self.np_random.normal() * speed_deviation,
-        )
+        ) # type: ignore
         vehicle.plan_route_to(self.np_random.choice(destinations))
         vehicle.randomize_behavior()
         self.road.vehicles.append(vehicle)
 
+
+class RoundaboutGenericEnvConfig(RoundaboutEnvConfig):
+    roundabout_radius: float
+    roundabout_lanes: int
+    vehicles_count: int
 
 class RoundaboutGenericEnv(RoundaboutEnv):
     """
@@ -397,8 +412,8 @@ class RoundaboutGenericEnv(RoundaboutEnv):
     """
 
     @classmethod
-    def default_config(cls) -> dict:
-        config = super().default_config()
+    def default_config(cls) -> RoundaboutGenericEnvConfig:
+        config:RoundaboutGenericEnvConfig = super().default_config() # type: ignore
         config.update(
             {
                 "roundabout_radius": 20,
@@ -410,7 +425,7 @@ class RoundaboutGenericEnv(RoundaboutEnv):
         return config
 
     def _make_road(self) -> None:
-        center = [0, 0]  # [m]
+        center = np.array([0, 0])  # [m]
         radius = self.config["roundabout_radius"]
         num_lanes = self.config["roundabout_lanes"]
         alpha = 24  # [deg]
@@ -434,13 +449,13 @@ class RoundaboutGenericEnv(RoundaboutEnv):
 
         for lane in range(num_lanes):
             if num_lanes == 1:
-                line_types = [c, c]
+                line_types = (c, c)
             elif lane == 0:
-                line_types = [c, s]
+                line_types = (c, s)
             elif lane == num_lanes - 1:
-                line_types = [n, c]
+                line_types = (n, c)
             else:
-                line_types = [n, s]
+                line_types = (n, s)
 
             for i in range(8):
                 net.add_lane(
@@ -483,13 +498,13 @@ class RoundaboutGenericEnv(RoundaboutEnv):
         net.add_lane(
             "ser",
             "ses",
-            StraightLane([2, access], [2, dev / 2], line_types=(s, c)),
+            StraightLane(np.array([2, access]), np.array([2, dev / 2]), line_types=(s, c)),
         )
         net.add_lane(
             "ses",
             "se",
             SineLane(
-                [2 + a, dev / 2], [2 + a, p_se[1]], a, w, -np.pi / 2, line_types=(c, c)
+                np.array([2 + a, dev / 2]), np.array([2 + a, p_se[1]]), a, w, -np.pi / 2, line_types=(c, c)
             ),
         )
 
@@ -501,8 +516,8 @@ class RoundaboutGenericEnv(RoundaboutEnv):
             "sx",
             "sxs",
             SineLane(
-                [p_sx[0] - a, p_sx[1]],
-                [p_sx[0] - a, dev / 2],
+                np.array([p_sx[0] - a, p_sx[1]]),
+                np.array([p_sx[0] - a, dev / 2]),
                 a,
                 w,
                 -np.pi / 2,
@@ -512,7 +527,7 @@ class RoundaboutGenericEnv(RoundaboutEnv):
         net.add_lane(
             "sxs",
             "sxr",
-            StraightLane([-2, dev / 2], [-2, access], line_types=(n, c)),
+            StraightLane(np.array([[-2, dev / 2]]), np.array([-2, access]), line_types=(n, c)),
         )
 
         # East Entry (ees -> ee)
@@ -522,14 +537,14 @@ class RoundaboutGenericEnv(RoundaboutEnv):
         net.add_lane(
             "eer",
             "ees",
-            StraightLane([access, -2], [dev / 2, -2], line_types=(s, c)),
+            StraightLane(np.array([access, -2]), np.array([dev / 2, -2]), line_types=(s, c)),
         )
         net.add_lane(
             "ees",
             "ee",
             SineLane(
-                [dev / 2, -2 - a],
-                [p_ee[0], -2 - a],
+                np.array([dev / 2, -2 - a]),
+                np.array([p_ee[0], -2 - a]),
                 a,
                 w,
                 -np.pi / 2,
@@ -545,8 +560,8 @@ class RoundaboutGenericEnv(RoundaboutEnv):
             "ex",
             "exs",
             SineLane(
-                [p_ex[0], p_ex[1] + a],
-                [dev / 2, p_ex[1] + a],
+                np.array([p_ex[0], p_ex[1] + a]),
+                np.array([dev / 2, p_ex[1] + a]),
                 a,
                 w,
                 -np.pi / 2,
@@ -556,7 +571,7 @@ class RoundaboutGenericEnv(RoundaboutEnv):
         net.add_lane(
             "exs",
             "exr",
-            StraightLane([dev / 2, 2], [access, 2], line_types=(n, c)),
+            StraightLane(np.array([dev / 2, 2]), np.array([access, 2]), line_types=(n, c)),
         )
 
         # North Entry (nes -> ne)
@@ -566,14 +581,14 @@ class RoundaboutGenericEnv(RoundaboutEnv):
         net.add_lane(
             "ner",
             "nes",
-            StraightLane([-2, -access], [-2, -dev / 2], line_types=(s, c)),
+            StraightLane(np.array([-2, -access]), np.array([-2, -dev / 2]), line_types=(s, c)),
         )
         net.add_lane(
             "nes",
             "ne",
             SineLane(
-                [-2 - a, -dev / 2],
-                [-2 - a, p_ne[1]],
+                np.array([-2 - a, -dev / 2]),
+                np.array([-2 - a, p_ne[1]]),
                 a,
                 w,
                 -np.pi / 2,
@@ -589,8 +604,8 @@ class RoundaboutGenericEnv(RoundaboutEnv):
             "nx",
             "nxs",
             SineLane(
-                [p_nx[0] + a, p_nx[1]],
-                [p_nx[0] + a, -dev / 2],
+                np.array([p_nx[0] + a, p_nx[1]]),
+                np.array([p_nx[0] + a, -dev / 2]),
                 a,
                 w,
                 -np.pi / 2,
@@ -600,7 +615,7 @@ class RoundaboutGenericEnv(RoundaboutEnv):
         net.add_lane(
             "nxs",
             "nxr",
-            StraightLane([2, -dev / 2], [2, -access], line_types=(n, c)),
+            StraightLane(np.array([2, -dev / 2]), np.array([2, -access]), line_types=(n, c)),
         )
 
         # West Entry (wes -> we)
@@ -610,13 +625,13 @@ class RoundaboutGenericEnv(RoundaboutEnv):
         net.add_lane(
             "wer",
             "wes",
-            StraightLane([-access, 2], [-dev / 2, 2], line_types=(s, c)),
+            StraightLane(np.array([-access, 2]), np.array([-dev / 2, 2]), line_types=(s, c)),
         )
         net.add_lane(
             "wes",
             "we",
             SineLane(
-                [-dev / 2, 2 + a], [p_we[0], 2 + a], a, w, -np.pi / 2, line_types=(c, c)
+                np.array([-dev / 2, 2 + a]), np.array([p_we[0], 2 + a]), a, w, -np.pi / 2, line_types=(c, c)
             ),
         )
 
@@ -628,8 +643,8 @@ class RoundaboutGenericEnv(RoundaboutEnv):
             "wx",
             "wxs",
             SineLane(
-                [p_wx[0], p_wx[1] - a],
-                [-dev / 2, p_wx[1] - a],
+                np.array([p_wx[0], p_wx[1] - a]),
+                np.array([-dev / 2, p_wx[1] - a]),
                 a,
                 w,
                 -np.pi / 2,
@@ -639,7 +654,7 @@ class RoundaboutGenericEnv(RoundaboutEnv):
         net.add_lane(
             "wxs",
             "wxr",
-            StraightLane([-dev / 2, -2], [-access, -2], line_types=(n, c)),
+            StraightLane(np.array([-dev / 2, -2]), np.array([-access, -2]), line_types=(n, c)),
         )
 
         road = Road(
@@ -659,12 +674,12 @@ class RoundaboutGenericEnv(RoundaboutEnv):
         ego_lane = self.road.network.get_lane(ego_lane_id)
         ego_longitudinal = ego_lane.length - 2.5  # Placed at end of straight lane
 
-        ego_vehicle = self.action_type.vehicle_class(
+        ego_vehicle:MDPVehicle = self.action_type.vehicle_class(
             self.road,
             ego_lane.position(ego_longitudinal, 0.0),
             speed=8.0,
             heading=ego_lane.heading_at(ego_longitudinal),
-        )
+        ) # type: ignore
         try:
             ego_vehicle.plan_route_to("nxs")
         except AttributeError:
@@ -695,7 +710,7 @@ class RoundaboutGenericEnv(RoundaboutEnv):
                 available_lanes = len(
                     self.road.network.graph[lane_tuple[0]][lane_tuple[1]]
                 )
-                lane_index = self.np_random.integers(0, available_lanes)
+                lane_index = int(self.np_random.integers(0, available_lanes))
                 lane_id = (lane_tuple[0], lane_tuple[1], lane_index)
 
                 lane = self.road.network.get_lane(lane_id)
@@ -713,12 +728,12 @@ class RoundaboutGenericEnv(RoundaboutEnv):
                         break
 
                 if is_safe:
-                    vehicle = other_vehicles_type.make_on_lane(
+                    vehicle:IDMVehicle = other_vehicles_type.make_on_lane(
                         self.road,
                         lane_id,
                         longitudinal=longitudinal,
                         speed=14.0 + self.np_random.normal() * speed_deviation,
-                    )
+                    ) # type: ignore
 
                     if self.config.get("incoming_vehicle_destination") is not None:
                         dest_idx = min(

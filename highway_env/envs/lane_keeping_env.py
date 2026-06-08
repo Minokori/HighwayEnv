@@ -1,29 +1,43 @@
 from __future__ import annotations
 
 import copy
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from highway_env.envs.common.abstract import AbstractEnv
+from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
+from highway_env.interval import LPV
 from highway_env.road.lane import LineType, SineLane, StraightLane
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.vehicle.dynamics import BicycleVehicle
+from highway_env.vehicle.kinematics import Vehicle
 
+
+class LaneKeepingEnvConfig(EnvironmentConfig):
+    state_noise:float
+    derivative_noise:float
 
 class LaneKeepingEnv(AbstractEnv):
     """A lane keeping control task."""
 
-    def __init__(self, config: dict = None) -> None:
+    if TYPE_CHECKING:
+        @property
+        def vehicle(self) -> BicycleVehicle: ...
+        @vehicle.setter
+        def vehicle(self, value: Vehicle): ...
+
+    def __init__(self, config: LaneKeepingEnvConfig|None = None) -> None:
         super().__init__(config)
-        self.lane = None
+        # we assume that the lane is not None in runtime
+        self.lane:StraightLane | SineLane = None  # type: ignore
         self.lanes = []
         self.trajectory = []
         self.interval_trajectory = []
-        self.lpv = None
+        self.lpv:LPV|None = None
 
     @classmethod
-    def default_config(cls) -> dict:
-        config = super().default_config()
+    def default_config(cls) -> LaneKeepingEnvConfig:
+        config:LaneKeepingEnvConfig = super().default_config()  # type: ignore
         config.update(
             {
                 "observation": {
@@ -86,18 +100,18 @@ class LaneKeepingEnv(AbstractEnv):
     def _make_road(self) -> None:
         net = RoadNetwork()
         lane = SineLane(
-            [0, 0],
-            [500, 0],
+            np.array([0, 0]),
+            np.array([500, 0]),
             amplitude=5,
             pulsation=2 * np.pi / 100,
             phase=0,
             width=10,
-            line_types=[LineType.STRIPED, LineType.STRIPED],
+            line_types=(LineType.STRIPED, LineType.STRIPED),
         )
         net.add_lane("a", "b", lane)
         other_lane = StraightLane(
-            [50, 50],
-            [115, 15],
+            np.array([50, 50]),
+            np.array([115, 15]),
             line_types=(LineType.STRIPED, LineType.STRIPED),
             width=10,
         )
@@ -108,27 +122,27 @@ class LaneKeepingEnv(AbstractEnv):
             "d",
             "a",
             StraightLane(
-                [115, 15],
-                [115 + 20, 15 + 20 * (15 - 50) / (115 - 50)],
+                np.array([115, 15]),
+                np.array([115 + 20, 15 + 20 * (15 - 50) / (115 - 50)]),
                 line_types=(LineType.NONE, LineType.STRIPED),
                 width=10,
             ),
         )
         road = Road(
             network=net,
-            np_random=self.np_random,
+            np_random=self.np_random, # type: ignore
             record_history=self.config["show_trajectories"],
         )
         self.road = road
 
     def _make_vehicles(self) -> None:
         road = self.road
-        ego_vehicle = self.action_type.vehicle_class(
+        ego_vehicle: BicycleVehicle = self.action_type.vehicle_class(
             road,
             road.network.get_lane(("c", "d", 0)).position(50, -4),
             heading=road.network.get_lane(("c", "d", 0)).heading_at(0),
             speed=8.3,
-        )
+        )  # type: ignore
         road.vehicles.append(ego_vehicle)
         self.vehicle = ego_vehicle
 
@@ -170,8 +184,8 @@ class LaneKeepingEnv(AbstractEnv):
             state = self.vehicle.state.copy()
             interval = []
             for x_t in self.lpv.change_coordinates(
-                self.lpv.x_i_t, back=True, interval=True
-            ):
+                self.lpv.x_i_t, back=True, interval=True # type: ignore
+            ): # type: ignore
                 # lateral state to full state
                 np.put(state, [1, 2, 4, 5], x_t)
                 # full state to absolute coordinates

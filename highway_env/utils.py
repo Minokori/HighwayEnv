@@ -10,6 +10,8 @@ import numpy as np
 from git import TYPE_CHECKING
 from numpy.typing import NDArray
 
+from highway_env.vehicle.kinematics import Vehicle
+
 
 # Useful types
 # Vector = NDArray[np.float64]|  Sequence[float]
@@ -18,22 +20,11 @@ from numpy.typing import NDArray
 
 # TODO  we should try use numpy.typing to specify vector and matrix like below:
 Vector = np.ndarray[tuple[int], np.dtype[np.floating]]
+"""An 1D ndarray, shape (n,)"""
 Matrix = np.ndarray[tuple[int, int], np.dtype[np.floating]]
-Interval =np.ndarray[tuple[int, int], np.dtype[np.floating]] | np.ndarray[tuple[int, int,int], np.dtype[np.floating]]
-
-class ActionDict(TypedDict):
-    """A dictionary representation of an action, for use in MultiAgentAction."""
-
-    acceleration: float
-    """the acceleration to apply, range in [-1,1],
-
-    mapped to the acceleration range defined in `ContinuousAction.acceleration_range`
-    """
-    steering: float
-    """the steering angle to apply, range in [-1,1],
-
-    mapped to the steering range defined in `ContinuousAction.steering_range`
-    """
+"""An 2D ndarray, shape (m, n)"""
+Interval =Vector|Matrix | np.ndarray[tuple[int, int,int], np.dtype[np.floating]]
+"""An 1D or 2D or 3D ndarray, shape (2,) or (2, n) or (2, m, n)"""
 
 class ActionDict(TypedDict):
     """A dictionary representation of an action, for use in MultiAgentAction."""
@@ -62,7 +53,7 @@ def get_class_path(cls: Callable) -> str:
     return cls.__module__ + "." + cls.__qualname__
 
 
-def class_from_path(path: str) -> Callable:
+def class_from_path(path: str) -> type[Vehicle]:
     module_name, class_name = path.rsplit(".", 1)
     class_object = getattr(importlib.import_module(module_name), class_name)
     return class_object
@@ -379,7 +370,7 @@ def is_consistent_dataset(data: dict, parameter_box: NDArray[np.float64]) -> boo
         return True
 
 
-def near_split(x, num_bins=None, size_bins=None):
+def near_split(x, num_bins=None, size_bins=None)->list[int]: # type: ignore
     """
     Split a number into several bins with near-even distribution.
 

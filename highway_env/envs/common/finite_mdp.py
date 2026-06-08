@@ -4,6 +4,7 @@ import importlib
 from functools import partial
 from typing import TYPE_CHECKING
 
+from highway_env.vehicle.controller import MDPVehicle
 import numpy as np
 
 from highway_env import utils
@@ -11,7 +12,7 @@ from highway_env.vehicle.kinematics import Vehicle
 
 
 if TYPE_CHECKING:
-    from highway_env.envs import AbstractEnv
+    from highway_env.envs.common.abstract import AbstractEnv
 
 
 def finite_mdp(
@@ -46,7 +47,7 @@ def finite_mdp(
 
     # Compute current state
     grid_state = (env.vehicle.speed_index, env.vehicle.lane_index[2], 0)
-    state = np.ravel_multi_index(grid_state, grid.shape)
+    state = np.ravel_multi_index(grid_state, grid.shape) # type: ignore
 
     # Compute transition function
     transition_model_with_grid = partial(transition_model, grid=grid)
@@ -61,7 +62,7 @@ def finite_mdp(
     speeds = np.arange(v) / max(v - 1, 1)
 
     state_reward = (
-        +env.config["collision_reward"] * grid
+        + env.config["collision_reward"] * grid
         + env.config["right_lane_reward"]
         * np.tile(lanes[np.newaxis, :, np.newaxis], (v, 1, t))
         + env.config["high_speed_reward"]
@@ -105,7 +106,7 @@ def compute_ttc_grid(
     env: AbstractEnv,
     time_quantization: float,
     horizon: float,
-    vehicle: Vehicle | None = None,
+    vehicle: MDPVehicle | None = None,
 ) -> np.ndarray:
     """
     Compute the grid of predicted time-to-collision to each vehicle within the lane
@@ -146,10 +147,10 @@ def compute_ttc_grid(
                     if len(env.road.network.all_side_lanes(other.lane_index)) == len(
                         env.road.network.all_side_lanes(vehicle.lane_index)
                     ):
-                        lane = [other.lane_index[2]]
+                        lane:list[int] = [other.lane_index[2]] # type: ignore
                     # Different road of different number of lanes: uncertainty on future lane, use all
                     else:
-                        lane = range(grid.shape[1])
+                        lane:list[int]|range = range(grid.shape[1])
                     # Quantize time-to-collision to both upper and lower values
                     for time in [
                         int(time_to_collision / time_quantization),

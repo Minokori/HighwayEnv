@@ -1,22 +1,40 @@
 from __future__ import annotations
 
+from highway_env.vehicle.controller import ControlledVehicle, MDPVehicle
 import numpy as np
 
 from highway_env import utils
-from highway_env.envs.common.abstract import AbstractEnv
+from highway_env.envs.common.abstract import (
+    AbstractEnv,
+    EnvironmentConfig,
+    InformationDict,
+)
 from highway_env.road.lane import AbstractLane, CircularLane, LineType, StraightLane
 from highway_env.road.regulation import RegulatedRoad
 from highway_env.road.road import RoadNetwork
 from highway_env.vehicle.kinematics import Vehicle
 
 
+class IntersectionEnvConfig(EnvironmentConfig):
+    duration:float
+    destination:str
+    controlled_vehicles:int
+    initial_vehicle_count:int
+    spawn_probability:float
+    collision_reward:float
+    high_speed_reward:float
+    arrived_reward:float
+    reward_speed_range:list[float]
+    normalize_reward:bool
+    offroad_terminal:bool
+
 class IntersectionEnv(AbstractEnv):
     ACTIONS: dict[int, str] = {0: "SLOWER", 1: "IDLE", 2: "FASTER"}
     ACTIONS_INDEXES = {v: k for k, v in ACTIONS.items()}
 
     @classmethod
-    def default_config(cls) -> dict:
-        config = super().default_config()
+    def default_config(cls) -> IntersectionEnvConfig:
+        config:IntersectionEnvConfig = super().default_config()  #type: ignore
         config.update(
             {
                 "observation": {
@@ -86,15 +104,15 @@ class IntersectionEnv(AbstractEnv):
         if self.config["normalize_reward"]:
             reward = utils.lmap(
                 reward,
-                [self.config["collision_reward"], self.config["arrived_reward"]],
-                [0, 1],
+                np.array([self.config["collision_reward"], self.config["arrived_reward"]]),
+                np.array([0, 1]),
             )
         return reward
 
     def _agent_rewards(self, action: int, vehicle: Vehicle) -> dict[str, float]:
         """Per-agent per-objective reward signal."""
         scaled_speed = utils.lmap(
-            vehicle.speed, self.config["reward_speed_range"], [0, 1]
+            vehicle.speed, self.config["reward_speed_range"], np.array([0, 1])
         )
         return {
             "collision_reward": vehicle.crashed,
@@ -118,7 +136,7 @@ class IntersectionEnv(AbstractEnv):
         """The episode is truncated if the time limit is reached."""
         return self.time >= self.config["duration"]
 
-    def _info(self, obs: np.ndarray, action: int) -> dict:
+    def _info(self, obs: np.ndarray, action: int) -> InformationDict:
         info = super()._info(obs, action)
         info["agents_rewards"] = tuple(
             self._agent_reward(action, vehicle) for vehicle in self.controlled_vehicles
@@ -132,7 +150,7 @@ class IntersectionEnv(AbstractEnv):
         self._make_road()
         self._make_vehicles(self.config["initial_vehicle_count"])
 
-    def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict]:
+    def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, InformationDict]:
         obs, reward, terminated, truncated, info = super().step(action)
         self._clear_vehicles()
         self._spawn_vehicle(spawn_probability=self.config["spawn_probability"])
@@ -177,7 +195,7 @@ class IntersectionEnv(AbstractEnv):
                 "o" + str(corner),
                 "ir" + str(corner),
                 StraightLane(
-                    start, end, line_types=[s, c], priority=priority, speed_limit=10.0
+                    start, end, line_types=(s, c), priority=priority, speed_limit=10.0
                 ),
             )
             # Right turn
@@ -190,7 +208,7 @@ class IntersectionEnv(AbstractEnv):
                     right_turn_radius,
                     angle + np.radians(180),
                     angle + np.radians(270),
-                    line_types=[n, c],
+                    line_types=(n, c),
                     priority=priority,
                     speed_limit=10.0,
                 ),
@@ -213,7 +231,7 @@ class IntersectionEnv(AbstractEnv):
                     angle + np.radians(0),
                     angle + np.radians(-90),
                     clockwise=False,
-                    line_types=[n, n],
+                    line_types=(n, n),
                     priority=priority - 1,
                     speed_limit=10.0,
                 ),
@@ -225,7 +243,7 @@ class IntersectionEnv(AbstractEnv):
                 "ir" + str(corner),
                 "il" + str((corner + 2) % 4),
                 StraightLane(
-                    start, end, line_types=[s, n], priority=priority, speed_limit=10.0
+                    start, end, line_types=(s, n), priority=priority, speed_limit=10.0
                 ),
             )
             # Exit
@@ -237,13 +255,13 @@ class IntersectionEnv(AbstractEnv):
                 "il" + str((corner - 1) % 4),
                 "o" + str((corner - 1) % 4),
                 StraightLane(
-                    end, start, line_types=[n, c], priority=priority, speed_limit=10.0
+                    end, start, line_types=(n, c), priority=priority, speed_limit=10.0
                 ),
             )
 
         road = RegulatedRoad(
             network=net,
-            np_random=self.np_random,
+            np_random=self.np_random, # type: ignore
             record_history=self.config["show_trajectories"],
         )
         self.road = road
@@ -291,12 +309,12 @@ class IntersectionEnv(AbstractEnv):
             destination = self.config["destination"] or "o" + str(
                 self.np_random.integers(1, 4)
             )
-            ego_vehicle = self.action_type.vehicle_class(
+            ego_vehicle:MDPVehicle = self.action_type.vehicle_class(
                 self.road,
                 ego_lane.position(60.0 + 5.0 * self.np_random.normal(1.0), 0.0),
                 speed=ego_lane.speed_limit,
                 heading=ego_lane.heading_at(60.0),
-            )
+            ) # type: ignore
             try:
                 ego_vehicle.plan_route_to(destination)
                 ego_vehicle.speed_index = ego_vehicle.speed_to_index(
@@ -371,7 +389,7 @@ class IntersectionEnv(AbstractEnv):
 
 class MultiAgentIntersectionEnv(IntersectionEnv):
     @classmethod
-    def default_config(cls) -> dict:
+    def default_config(cls) -> IntersectionEnvConfig:
         config = super().default_config()
         config.update(
             {
@@ -395,7 +413,7 @@ class MultiAgentIntersectionEnv(IntersectionEnv):
 
 class ContinuousIntersectionEnv(IntersectionEnv):
     @classmethod
-    def default_config(cls) -> dict:
+    def default_config(cls) -> IntersectionEnvConfig:
         config = super().default_config()
         config.update(
             {

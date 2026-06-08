@@ -3,20 +3,24 @@ from __future__ import annotations
 import numpy as np
 
 from highway_env import utils
+from highway_env.envs.common.abstract import InformationDict
 from highway_env.envs.common.action import Action
-from highway_env.envs.highway_env import HighwayEnv
+from highway_env.envs.highway_env import HighwayEnv, HighwayEnvConfig
 from highway_env.road.lane import CircularLane
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.vehicle.controller import ControlledVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
 
+class ExitEnvConfig(HighwayEnvConfig):
+    goal_reward:float
+
 class ExitEnv(HighwayEnv):
     """ """
 
     @classmethod
-    def default_config(cls) -> dict:
-        config = super().default_config()
+    def default_config(cls) -> ExitEnvConfig:
+        config: ExitEnvConfig = super().default_config() # type: ignore
         config.update(
             {
                 "observation": {
@@ -46,7 +50,7 @@ class ExitEnv(HighwayEnv):
         self._create_road()
         self._create_vehicles()
 
-    def step(self, action) -> tuple[np.ndarray, float, bool, bool, dict]:
+    def step(self, action) -> tuple[np.ndarray, float, bool, bool, InformationDict]:
         obs, reward, terminated, truncated, info = super().step(action)
         info.update({"is_success": self._is_success()})
         return obs, reward, terminated, truncated, info
@@ -133,7 +137,7 @@ class ExitEnv(HighwayEnv):
                 lane_id=lane_id,
                 speed=lane.speed_limit,
                 spacing=1 / self.config["vehicles_density"],
-            ).plan_route_to("3")
+            ).plan_route_to("3") # type: ignore
             vehicle.enable_lane_change = False
             self.road.vehicles.append(vehicle)
 
@@ -150,8 +154,8 @@ class ExitEnv(HighwayEnv):
         if self.config["normalize_reward"]:
             reward = utils.lmap(
                 reward,
-                [self.config["collision_reward"], self.config["goal_reward"]],
-                [0, 1],
+                np.array([self.config["collision_reward"], self.config["goal_reward"]]),
+                np.array([0, 1]),
             )
             reward = np.clip(reward, 0, 1)
         return reward
@@ -163,13 +167,13 @@ class ExitEnv(HighwayEnv):
             else self.vehicle.lane_index
         )
         scaled_speed = utils.lmap(
-            self.vehicle.speed, self.config["reward_speed_range"], [0, 1]
+            self.vehicle.speed, self.config["reward_speed_range"], np.array([0, 1])
         )
         return {
             "collision_reward": self.vehicle.crashed,
             "goal_reward": self._is_success(),
             "high_speed_reward": np.clip(scaled_speed, 0, 1),
-            "right_lane_reward": lane_index[-1],
+            "right_lane_reward": lane_index[-1], # type: ignore
         }
 
     def _is_success(self):

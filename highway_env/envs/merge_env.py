@@ -3,12 +3,20 @@ from __future__ import annotations
 import numpy as np
 
 from highway_env import utils
-from highway_env.envs.common.abstract import AbstractEnv
+from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
 from highway_env.road.lane import LineType, SineLane, StraightLane
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.vehicle.controller import ControlledVehicle
 from highway_env.vehicle.objects import Obstacle
 
+
+class MergeEnvConfig(EnvironmentConfig):
+    collision_reward: float
+    right_lane_reward: float
+    high_speed_reward: float
+    reward_speed_range: list[float]
+    merging_speed_reward: float
+    lane_change_reward: float
 
 class MergeEnv(AbstractEnv):
     """
@@ -20,8 +28,8 @@ class MergeEnv(AbstractEnv):
     """
 
     @classmethod
-    def default_config(cls) -> dict:
-        cfg = super().default_config()
+    def default_config(cls) -> MergeEnvConfig:
+        cfg:MergeEnvConfig = super().default_config()  #type: ignore
         cfg.update(
             {
                 "collision_reward": -1,
@@ -49,20 +57,20 @@ class MergeEnv(AbstractEnv):
         )
         return utils.lmap(
             reward,
-            [
+            np.array([
                 self.config["collision_reward"] + self.config["merging_speed_reward"],
                 self.config["high_speed_reward"] + self.config["right_lane_reward"],
-            ],
-            [0, 1],
+            ]),
+            np.array([0, 1]),
         )
 
     def _rewards(self, action: int) -> dict[str, float]:
         scaled_speed = utils.lmap(
-            self.vehicle.speed, self.config["reward_speed_range"], [0, 1]
+            self.vehicle.speed, self.config["reward_speed_range"], np.array([0, 1])
         )
         return {
             "collision_reward": self.vehicle.crashed,
-            "right_lane_reward": self.vehicle.lane_index[2] / 1,
+            "right_lane_reward": self.vehicle.lane_index[2] / 1,  # type: ignore
             "high_speed_reward": scaled_speed,
             "lane_change_reward": action in [0, 2],
             "merging_speed_reward": sum(  # Altruistic penalty
@@ -93,23 +101,23 @@ class MergeEnv(AbstractEnv):
         net = RoadNetwork()
 
         # Highway lanes
-        ends = [150, 80, 80, 150]  # Before, converging, merge, after
+        ends:list[float] = [150, 80, 80, 150]  # Before, converging, merge, after
         c, s, n = LineType.CONTINUOUS_LINE, LineType.STRIPED, LineType.NONE
         y = [0, StraightLane.DEFAULT_WIDTH]
-        line_type = [[c, s], [n, c]]
-        line_type_merge = [[c, s], [n, s]]
+        line_type: list[tuple[LineType, LineType]] = [(c, s), (n, c)]
+        line_type_merge: list[tuple[LineType, LineType]] = [(c, s), (n, s)]
         for i in range(2):
             net.add_lane(
                 "a",
                 "b",
-                StraightLane([0, y[i]], [sum(ends[:2]), y[i]], line_types=line_type[i]),
+                StraightLane(np.array([0, y[i]]), np.array([sum(ends[:2]), y[i]]), line_types=line_type[i]),
             )
             net.add_lane(
                 "b",
                 "c",
                 StraightLane(
-                    [sum(ends[:2]), y[i]],
-                    [sum(ends[:3]), y[i]],
+                    np.array([sum(ends[:2]), y[i]]),
+                    np.array([sum(ends[:3]), y[i]]),
                     line_types=line_type_merge[i],
                 ),
             )
@@ -117,14 +125,14 @@ class MergeEnv(AbstractEnv):
                 "c",
                 "d",
                 StraightLane(
-                    [sum(ends[:3]), y[i]], [sum(ends), y[i]], line_types=line_type[i]
+                    np.array([sum(ends[:3]), y[i]]), np.array([sum(ends), y[i]]), line_types=line_type[i]
                 ),
             )
 
         # Merging lane
         amplitude = 3.25
         ljk = StraightLane(
-            [0, 6.5 + 4 + 4], [ends[0], 6.5 + 4 + 4], line_types=[c, c], forbidden=True
+            np.array([0, 6.5 + 4 + 4]), np.array([ends[0], 6.5 + 4 + 4]), line_types=(c, c), forbidden=True
         )
         lkb = SineLane(
             ljk.position(ends[0], -amplitude),
@@ -132,13 +140,13 @@ class MergeEnv(AbstractEnv):
             amplitude,
             2 * np.pi / (2 * ends[1]),
             np.pi / 2,
-            line_types=[c, c],
+            line_types=(c, c),
             forbidden=True,
         )
         lbc = StraightLane(
             lkb.position(ends[1], 0),
             lkb.position(ends[1], 0) + [ends[2], 0],
-            line_types=[n, c],
+            line_types=(n, c),
             forbidden=True,
         )
         net.add_lane("j", "k", ljk)
@@ -146,10 +154,10 @@ class MergeEnv(AbstractEnv):
         net.add_lane("b", "c", lbc)
         road = Road(
             network=net,
-            np_random=self.np_random,
+            np_random=self.np_random, # type: ignore
             record_history=self.config["show_trajectories"],
         )
-        road.objects.append(Obstacle(road, lbc.position(ends[2], 0)))
+        road.objects.append(Obstacle(road, *lbc.position(ends[2], 0)))
         self.road = road
 
     def _make_vehicles(self) -> None:
@@ -159,15 +167,15 @@ class MergeEnv(AbstractEnv):
         :return: the ego-vehicle
         """
         road = self.road
-        ego_vehicle = self.action_type.vehicle_class(
+        ego_vehicle:ControlledVehicle = self.action_type.vehicle_class(
             road, road.network.get_lane(("a", "b", 1)).position(30.0, 0.0), speed=30.0
-        )
+        ) # type: ignore
         road.vehicles.append(ego_vehicle)
 
         other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
 
         for position, speed in [(90.0, 29.0), (70.0, 31.0), (5.0, 31.5)]:
-            lane = road.network.get_lane(("a", "b", self.np_random.integers(2)))
+            lane = road.network.get_lane(("a", "b", int(self.np_random.integers(2))))  # type: ignore
             position = lane.position(position + self.np_random.uniform(-5.0, 5.0), 0.0)
             speed += self.np_random.uniform(-1.0, 1.0)
             road.vehicles.append(other_vehicles_type(road, position, speed=speed))

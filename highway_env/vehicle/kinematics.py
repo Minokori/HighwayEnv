@@ -46,6 +46,11 @@ class Vehicle(RoadObject):
 
         This field only exists in runtime.
         """
+        goal: RoadObject
+        """The goal of the vehicle, for reward computation.
+
+        This field only exists in runtime.
+        """
 
     LENGTH = 5.0
     """ Vehicle length [m] """
@@ -206,7 +211,7 @@ class Vehicle(RoadObject):
                 self.history.appendleft(self.create_from(self))
 
     def predict_trajectory_constant_speed(
-        self, times: NDArray[np.float32]
+        self, times: NDArray[np.float64]
     ) -> tuple[list[NDArray[np.float32]], list[float]]:
         if self.prediction_type == "zero_steering":
             action: ActionDict = {"acceleration": 0.0, "steering": 0.0}
@@ -246,7 +251,7 @@ class Vehicle(RoadObject):
             return self.position
 
     @property
-    def destination_direction(self) -> NDArray[np.float32]:
+    def destination_direction(self) -> NDArray[np.float64]:
         if (self.destination != self.position).any():
             return (self.destination - self.position) / np.linalg.norm(
                 self.destination - self.position
@@ -255,7 +260,7 @@ class Vehicle(RoadObject):
             return np.zeros((2,))
 
     @property
-    def lane_offset(self) -> NDArray[np.float32]:
+    def lane_offset(self) -> NDArray[np.float64]:
         if self.lane is not None:
             long, lat = self.lane.local_coordinates(self.position)
             ang = self.lane.local_angle(self.heading, long)

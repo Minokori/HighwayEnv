@@ -36,7 +36,7 @@ class WorldSurface(pygame.Surface):
         self, size: tuple[int, int], flags: object, surf: pygame.SurfaceType
     ) -> None:
         super().__init__(size, flags, surf)  # type: ignore
-        self.origin = np.array([0, 0])
+        self.origin:Vector = np.array([0, 0])
         self.scaling = self.INITIAL_SCALING
         self.centering_position = self.INITIAL_CENTERING
 
@@ -401,9 +401,9 @@ class RoadObjectGraphics:
     def blit_rotate(
         surf: pygame.SurfaceType,
         image: pygame.SurfaceType,
-        pos: Vector,
+        pos: tuple[int, int],
         angle: float,
-        origin_pos: Vector|None = None,
+        origin_pos: tuple[float, float]|None = None,
         show_rect: bool = False,
     ) -> None:
         """Many thanks to https://stackoverflow.com/a/54714144."""
@@ -422,7 +422,7 @@ class RoadObjectGraphics:
 
         # calculate the translation of the pivot
         if origin_pos is None:
-            origin_pos = w / 2, h / 2
+            origin_pos = (w / 2, h / 2)
         pivot = pygame.math.Vector2(origin_pos[0], -origin_pos[1])
         pivot_rotate = pivot.rotate(angle)
         pivot_move = pivot_rotate - pivot

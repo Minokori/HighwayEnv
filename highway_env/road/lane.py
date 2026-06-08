@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import enum
-import enum
 from abc import ABCMeta, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -34,6 +33,12 @@ class AbstractLane:
         This field only exist in implementations of AbstractLane, but not in the abstract class itself.
         """
 
+        heading: float
+        """the lane heading [rad].
+
+            This field only exist in implementations of AbstractLane, but not in the abstract class itself.
+        """
+
     metaclass__ = ABCMeta
     DEFAULT_WIDTH: float = 4
     VEHICLE_LENGTH: float = 5
@@ -41,7 +46,7 @@ class AbstractLane:
     line_types: list[LineType]
 
     @abstractmethod
-    def position(self, longitudinal: float, lateral: float) -> NDArray[np.float32]:
+    def position(self, longitudinal: float, lateral: float) -> Vector:
         """
         Convert local lane coordinates to a world position.
 
@@ -201,9 +206,9 @@ class StraightLane(AbstractLane):
         :param forbidden: is changing to this lane forbidden
         :param priority: priority level of the lane, for determining who has right of way
         """
-        self.start: NDArray[np.float32] = np.array(start)
+        self.start: Vector = np.array(start)
         """the lane starting position [m]"""
-        self.end: NDArray[np.float32] = np.array(end)
+        self.end: Vector = np.array(end)
         """the lane ending position [m]"""
         self.width: float = width
         """the lane width [m]"""
@@ -215,9 +220,9 @@ class StraightLane(AbstractLane):
         """the lane length [m]"""
         self.line_types: list[LineType] = [*line_types] if line_types else [LineType.STRIPED, LineType.STRIPED]
         """the type of lines on both sides of the lane"""
-        self.direction: NDArray[np.float32] = (self.end - self.start) / self.length
+        self.direction: Vector = (self.end - self.start) / self.length
         """the lane direction vector"""
-        self.direction_lateral: NDArray[np.float32] = np.array([-self.direction[1], self.direction[0]])
+        self.direction_lateral: Vector = np.array([-self.direction[1], self.direction[0]])
         """the lane lateral direction vector"""
         self.forbidden: bool = forbidden
         """is changing to this lane forbidden"""
@@ -226,7 +231,7 @@ class StraightLane(AbstractLane):
         self.speed_limit: float = speed_limit
         """the lane speed limit [m/s]"""
 
-    def position(self, longitudinal: float, lateral: float) -> NDArray[np.float32]:
+    def position(self, longitudinal: float, lateral: float) -> NDArray[np.float64]:
         return (
             self.start
             + longitudinal * self.direction
@@ -298,7 +303,7 @@ class SineLane(StraightLane):
         self.pulsation = pulsation
         self.phase = phase
 
-    def position(self, longitudinal: float, lateral: float) -> NDArray[np.float32]:
+    def position(self, longitudinal: float, lateral: float) -> Vector:
         return super().position(
             longitudinal,
             lateral
@@ -312,7 +317,7 @@ class SineLane(StraightLane):
             * np.cos(self.pulsation * longitudinal + self.phase)
         )
 
-    def local_coordinates(self, position: NDArray[np.float32]) -> tuple[float, float]:
+    def local_coordinates(self, position: Vector) -> tuple[float, float]:
         longitudinal, lateral = super().local_coordinates(position)
         return longitudinal, lateral - self.amplitude * np.sin(
             self.pulsation * longitudinal + self.phase
@@ -371,7 +376,7 @@ class CircularLane(AbstractLane):
         self.priority: int = priority
         self.speed_limit: float = speed_limit
 
-    def position(self, longitudinal: float, lateral: float) -> NDArray[np.float32]:
+    def position(self, longitudinal: float, lateral: float) -> Vector:
         phi = self.direction * longitudinal / self.radius + self.start_phase
         return self.center + (self.radius - lateral * self.direction) * np.array(
             [np.cos(phi), np.sin(phi)]

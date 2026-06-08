@@ -30,8 +30,7 @@ class RoadObject(ABC):
     def __init__(
         self,
         road: Road | None,
-        road: Road | None,
-        position: Sequence[float],
+        position: Sequence[float]|utils.Vector,
         heading: float = 0,
         speed: float = 0,
     ):
@@ -124,7 +123,7 @@ class RoadObject(ABC):
             if not other.solid:
                 other.hit = True
 
-    def _is_colliding(self, other: RoadObject, dt: float) -> tuple[bool, bool, NDArray[np.float32]]:
+    def _is_colliding(self, other: RoadObject, dt: float) -> tuple[bool, bool, NDArray[np.float64]]:
         # Fast spherical pre-check
         if (
             np.linalg.norm(other.position - self.position)
@@ -239,7 +238,7 @@ class Landmark(RoadObject):
     """Landmarks of certain areas on the road that must be reached."""
 
     def __init__(
-        self, road, position: Sequence[float], heading: float = 0, speed: float = 0
+        self, road, position: Sequence[float]|utils.Vector, heading: float = 0, speed: float = 0
     ):
         super().__init__(road, position, heading, speed)
         self.solid:bool = False

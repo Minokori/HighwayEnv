@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+from highway_env.vehicle.behavior import IDMVehicle
 import numpy as np
 
 from highway_env import utils
-from highway_env.envs.common.abstract import AbstractEnv
+from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
 from highway_env.road.lane import LineType, StraightLane
 from highway_env.road.road import Road, RoadNetwork
 
+
+class TwoWayEnvConfig(EnvironmentConfig):
+    collision_reward: float
+    left_lane_constraint: float
+    left_lane_reward: float
+    high_speed_reward: float
 
 class TwoWayEnv(AbstractEnv):
     """
@@ -19,8 +26,8 @@ class TwoWayEnv(AbstractEnv):
     """
 
     @classmethod
-    def default_config(cls) -> dict:
-        config = super().default_config()
+    def default_config(cls) -> TwoWayEnvConfig:
+        config: TwoWayEnvConfig = super().default_config() # type: ignore
         config.update(
             {
                 "observation": {"type": "TimeToCollision", "horizon": 5},
@@ -53,7 +60,7 @@ class TwoWayEnv(AbstractEnv):
             / (self.vehicle.target_speeds.size - 1),
             "left_lane_reward": (
                 len(neighbours) - 1 - self.vehicle.target_lane_index[2]
-            )
+            ) # type: ignore
             / (len(neighbours) - 1),
         }
 
@@ -64,7 +71,7 @@ class TwoWayEnv(AbstractEnv):
     def _is_truncated(self) -> bool:
         return False
 
-    def _reset(self) -> np.ndarray:
+    def _reset(self) -> None:
         self._make_road()
         self._make_vehicles()
 
@@ -81,8 +88,8 @@ class TwoWayEnv(AbstractEnv):
             "a",
             "b",
             StraightLane(
-                [0, 0],
-                [length, 0],
+                np.array([0, 0]),
+                np.array([length, 0]),
                 line_types=(LineType.CONTINUOUS_LINE, LineType.STRIPED),
             ),
         )
@@ -90,8 +97,8 @@ class TwoWayEnv(AbstractEnv):
             "a",
             "b",
             StraightLane(
-                [0, StraightLane.DEFAULT_WIDTH],
-                [length, StraightLane.DEFAULT_WIDTH],
+                np.array([0, StraightLane.DEFAULT_WIDTH]),
+                np.array([length, StraightLane.DEFAULT_WIDTH]),
                 line_types=(LineType.NONE, LineType.CONTINUOUS_LINE),
             ),
         )
@@ -99,7 +106,7 @@ class TwoWayEnv(AbstractEnv):
             "b",
             "a",
             StraightLane(
-                [length, 0], [0, 0], line_types=(LineType.NONE, LineType.NONE)
+                np.array([length, 0]), np.array([0, 0]), line_types=(LineType.NONE, LineType.NONE)
             ),
         )
 
@@ -121,9 +128,9 @@ class TwoWayEnv(AbstractEnv):
             road, road.network.get_lane(("a", "b", 1)).position(30.0, 0.0), speed=30.0
         )
         road.vehicles.append(ego_vehicle)
-        self.vehicle = ego_vehicle
+        self.vehicle = ego_vehicle # type: ignore
 
-        vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
+        vehicles_type:type[IDMVehicle] = utils.class_from_path(self.config["other_vehicles_type"]) # type: ignore
         for i in range(3):
             self.road.vehicles.append(
                 vehicles_type(

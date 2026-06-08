@@ -290,7 +290,7 @@ class RoadNetwork:
             lane for to in self.graph.values() for ids in to.values() for lane in ids
         ]
 
-    def lanes_dict(self) -> dict[tuple[str, str, int], AbstractLane]:
+    def lanes_dict(self) -> dict[LaneIndex, AbstractLane]:
         return {
             (from_, to_, i): lane
             for from_, tos in self.graph.items()
@@ -371,12 +371,11 @@ class RoadNetwork:
             lane_index
         ).heading_at(longitudinal)
 
-    def random_lane_index(self, np_random: np.random.RandomState) -> LaneIndex:
+    def random_lane_index(self, np_random: np.random.Generator) -> LaneIndex:
         _from = np_random.choice(list(self.graph.keys()))
         _to = np_random.choice(list(self.graph[_from].keys()))
-        # BUG in new numpy versions, the api of `integers` should be `random_integers(low, high)` or `randint`
-        _id = np_random.integers(len(self.graph[_from][_to]))
-        return _from, _to, _id
+        _id = np_random.integers(len(self.graph[_from][_to])) # type: ignore
+        return _from, _to, int(_id)
 
     @classmethod
     def from_config(cls, config: dict) -> "RoadNetwork":
@@ -408,7 +407,7 @@ class Road:
         network: RoadNetwork | None = None,
         vehicles: list[kinematics.Vehicle] | None = None,
         road_objects: Sequence[objects.RoadObject] | None = None,
-        np_random: np.random.RandomState | None = None,
+        np_random: np.random.Generator | None = None,
         record_history: bool = False,
     ) -> None:
         """
@@ -417,13 +416,13 @@ class Road:
         :param network: the road network describing the lanes
         :param vehicles: the vehicles driving on the road
         :param road_objects: the objects on the road including obstacles and landmarks
-        :param np.random.RandomState np_random: a random number generator for vehicle behaviour
+        :param np.random.Generator np_random: a random number generator for vehicle behaviour
         :param record_history: whether the recent trajectories of vehicles should be recorded for display
         """
         self.network: RoadNetwork = network  # type: ignore
         self.vehicles:list[kinematics.Vehicle] = vehicles or []
         self.objects:list[objects.RoadObject] =  [*road_objects] if road_objects else []
-        self.np_random: np.random.RandomState = np_random if np_random else np.random.RandomState()
+        self.np_random: np.random.Generator = np_random if np_random else np.random.default_rng()
         self.record_history: bool = record_history
 
     def close_objects_to(

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Union
 
 import numpy as np
 from numpy.typing import NDArray
 from scipy import interpolate
+
+from highway_env.utils import Vector
 
 
 class LinearSpline2D:
@@ -127,9 +128,9 @@ class CurvePose:
 
     def __init__(self, x: float, y: float, dx: float, dy: float):
         self.length:float = np.sqrt(dx**2 + dy**2)
-        self.position:NDArray[np.float32] = np.array([x, y]).flatten()
-        self.normal:NDArray[np.float32] = np.array([dx, dy]).flatten() / self.length
-        self.orthonormal:NDArray[np.float32] = np.array([-self.normal[1], self.normal[0]]).flatten()
+        self.position:Vector = np.array([x, y]).flatten()
+        self.normal:Vector = np.array([dx, dy]).flatten() / self.length
+        self.orthonormal:Vector = np.array([-self.normal[1], self.normal[0]]).flatten()
 
     def distance_to_origin(self, point: tuple[float, float]) -> float:
         """

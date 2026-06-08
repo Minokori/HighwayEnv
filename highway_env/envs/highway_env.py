@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from highway_env import utils
-from highway_env.envs.common.abstract import AbstractEnv
+from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
 from highway_env.envs.common.action import Action
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.utils import near_split
@@ -13,6 +13,21 @@ from highway_env.vehicle.kinematics import Vehicle
 
 Observation = np.ndarray
 
+class HighwayEnvConfig(EnvironmentConfig):
+    lanes_count: int
+    vehicles_count: int
+    controlled_vehicles: int
+    initial_lane_id: int | None
+    duration: float
+    ego_spacing: float
+    vehicles_density: float
+    collision_reward: float
+    right_lane_reward: float
+    high_speed_reward: float
+    lane_change_reward: float
+    reward_speed_range: list[float]
+    normalize_reward: bool
+    offroad_terminal: bool
 
 class HighwayEnv(AbstractEnv):
     """
@@ -23,8 +38,8 @@ class HighwayEnv(AbstractEnv):
     """
 
     @classmethod
-    def default_config(cls) -> dict:
-        config = super().default_config()
+    def default_config(cls) -> HighwayEnvConfig:
+        config:HighwayEnvConfig = super().default_config()  # type: ignore
         config.update(
             {
                 "observation": {"type": "Kinematics"},
@@ -61,7 +76,7 @@ class HighwayEnv(AbstractEnv):
             network=RoadNetwork.straight_road_network(
                 self.config["lanes_count"], speed_limit=30
             ),
-            np_random=self.np_random,
+            np_random=self.np_random, # type: ignore
             record_history=self.config["show_trajectories"],
         )
 
@@ -106,26 +121,26 @@ class HighwayEnv(AbstractEnv):
         if self.config["normalize_reward"]:
             reward = utils.lmap(
                 reward,
-                [
+                np.array([
                     self.config["collision_reward"],
                     self.config["high_speed_reward"] + self.config["right_lane_reward"],
-                ],
-                [0, 1],
+                ]),
+                np.array([0, 1]),
             )
         reward *= rewards["on_road_reward"]
         return reward
 
     def _rewards(self, action: Action) -> dict[str, float]:
         neighbours = self.road.network.all_side_lanes(self.vehicle.lane_index)
-        lane = (
+        lane:int = (
             self.vehicle.target_lane_index[2]
             if isinstance(self.vehicle, ControlledVehicle)
             else self.vehicle.lane_index[2]
-        )
+        ) # type: ignore
         # Use forward speed rather than speed, see https://github.com/eleurent/highway-env/issues/268
         forward_speed = self.vehicle.speed * np.cos(self.vehicle.heading)
         scaled_speed = utils.lmap(
-            forward_speed, self.config["reward_speed_range"], [0, 1]
+            forward_speed, np.array(self.config["reward_speed_range"]), np.array([0, 1])
         )
         return {
             "collision_reward": float(self.vehicle.crashed),
@@ -156,7 +171,7 @@ class HighwayEnvFast(HighwayEnv):
     """
 
     @classmethod
-    def default_config(cls) -> dict:
+    def default_config(cls) -> HighwayEnvConfig:
         cfg = super().default_config()
         cfg.update(
             {

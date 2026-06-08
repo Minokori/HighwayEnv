@@ -11,7 +11,7 @@ from highway_env.utils import Vector
 from highway_env.vehicle.kinematics import Vehicle
 
 
-def rk4(func: Callable[[float, NDArray[np.float32]], NDArray[np.float32]], state: NDArray[np.float32], dt: float = 0.01, t: float = 0, **kwargs) -> NDArray[np.float32]:
+def rk4(func: Callable[[float, Vector], Vector], state: Vector, dt: float = 0.01, t: float = 0, **kwargs) -> Vector:
     """
     single-step fourth-order numerical integration (RK4) method
     func: system of first order ODEs
@@ -56,7 +56,7 @@ class BicycleVehicle(Vehicle):
         self.A_lat, self.B_lat = self.lateral_lpv_dynamics()
 
     @property
-    def state(self) -> NDArray[np.float32]:
+    def state(self) -> NDArray[np.float64]:
         return np.array(
             [
                 [self.position[0]],
@@ -72,7 +72,7 @@ class BicycleVehicle(Vehicle):
     def derivative(self):
         return self.derivative_func(None, self.state)
 
-    def derivative_func(self, time: float | None, state: NDArray[np.float32], **kwargs) -> NDArray[np.float32]:
+    def derivative_func(self, time: float | None, state: Vector, **kwargs) -> NDArray[np.float64]:
         """
         See Chapter 2 of Lateral Vehicle Dynamics. Vehicle Dynamics and Control. Rajamani, R. (2011)
 
@@ -161,7 +161,7 @@ class BicycleVehicle(Vehicle):
             self.yaw_rate, -self.MAX_ANGULAR_SPEED, self.MAX_ANGULAR_SPEED
         )
 
-    def lateral_lpv_structure(self) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.float32]]:
+    def lateral_lpv_structure(self) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
         """
         State: [lateral speed v, yaw rate r]
 
@@ -206,7 +206,7 @@ class BicycleVehicle(Vehicle):
         )
         return A0, phi, B
 
-    def lateral_lpv_dynamics(self) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
+    def lateral_lpv_dynamics(self) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
         """
         State: [lateral speed v, yaw rate r]
 
@@ -217,7 +217,7 @@ class BicycleVehicle(Vehicle):
         A = A0 + np.tensordot(self.theta, phi, axes=(0, 0))
         return A, B
 
-    def full_lateral_lpv_structure(self) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.float32]]:
+    def full_lateral_lpv_structure(self) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
         """
         State: [position y, yaw psi, lateral speed v, yaw rate r]
 
@@ -244,7 +244,7 @@ class BicycleVehicle(Vehicle):
         B = np.concatenate((np.zeros((2, 1)), B_lat))
         return A0, phi, B
 
-    def full_lateral_lpv_dynamics(self) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
+    def full_lateral_lpv_dynamics(self) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
         """
         State: [position y, yaw psi, lateral speed v, yaw rate r]
 
@@ -307,7 +307,7 @@ def simulate(dt: float = 0.1) -> None:
     plot(time, xx, uu)
 
 
-def plot(time: NDArray[np.float32], xx: NDArray[np.float32], uu: NDArray[np.float32]) -> None:
+def plot(time: NDArray[np.float64], xx: NDArray[np.float32], uu: NDArray[np.float32]) -> None:
     pos_x, pos_y = xx[:, 0, 0], xx[:, 1, 0]
     psi_x, psi_y = np.cos(xx[:, 2, 0]), np.sin(xx[:, 2, 0])
     dir_x, dir_y = np.cos(xx[:, 2, 0] + uu[:, 0, 0]), np.sin(xx[:, 2, 0] + uu[:, 0, 0])

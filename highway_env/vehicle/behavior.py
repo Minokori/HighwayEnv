@@ -249,7 +249,7 @@ class IDMVehicle(ControlledVehicle):
             return
 
         # else, at a given frequency,
-        if not utils.do_every(self.LANE_CHANGE_DELAY, self.timer):
+        if not utils.do_every(self.LANE_CHANGE_DELAY, float(self.timer)):
             return
         self.timer = 0
 

@@ -5,7 +5,6 @@ import os
 from typing import NotRequired, TypedDict, TypeVar
 
 import gymnasium as gym
-from highway_env.road.road import Road
 import numpy as np
 from gymnasium import Wrapper
 from gymnasium.utils import RecordConstructorArgs
@@ -16,14 +15,15 @@ from highway_env.envs.common.action import Action, ActionType, action_factory
 from highway_env.envs.common.finite_mdp import finite_mdp
 from highway_env.envs.common.graphics import EnvViewer
 from highway_env.envs.common.observation import ObservationType, observation_factory
+from highway_env.road.road import Road
 from highway_env.vehicle.behavior import IDMVehicle
-from highway_env.vehicle.controller import ControlledVehicle
+from highway_env.vehicle.controller import ControlledVehicle, MDPVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
 
 Observation = TypeVar("Observation")
 
-class EnvironmentConfig(TypedDict):
+class EnvironmentConfig(TypedDict, total =False):
     observation: dict
     action: dict
     simulation_frequency: int
@@ -46,11 +46,16 @@ class EnvironmentConfig(TypedDict):
 
 
 
-class Infomation(TypedDict):
+
+class InformationDict(TypedDict):
     speed: float
     crashed: bool
     action: Action|None
     rewards: NotRequired[dict[str, float]]
+    # TODO check  if these fields are optional
+    is_success: NotRequired[bool]  # parking
+
+
 class AbstractEnv(gym.Env):
     """
     A generic environment for various tasks involving a vehicle driving on a road.
@@ -70,7 +75,7 @@ class AbstractEnv(gym.Env):
     PERCEPTION_DISTANCE = 5.0 * Vehicle.MAX_SPEED
     """The maximum distance of any vehicle present in the observation [m]"""
 
-    def __init__(self, config: EnvironmentConfig|None = None, render_mode: str | None = None) -> None:
+    def __init__(self, config: EnvironmentConfig|dict|None = None, render_mode: str | None = None) -> None:
         super().__init__()
 
         # Configuration
@@ -105,7 +110,7 @@ class AbstractEnv(gym.Env):
         self.reset()
 
     @property
-    def vehicle(self) -> ControlledVehicle:
+    def vehicle(self) -> MDPVehicle:
         """First (default) controlled vehicle."""
         # TODO: this shouldn't be None in runtime
         return self.controlled_vehicles[0] if self.controlled_vehicles else None # type: ignore
@@ -140,7 +145,7 @@ class AbstractEnv(gym.Env):
             "real_time_rendering": False,
         }
 
-    def configure(self, config: EnvironmentConfig|None) -> None:
+    def configure(self, config: EnvironmentConfig|dict|None) -> None:
         if config:
             self.config.update(config)
 
@@ -198,7 +203,7 @@ class AbstractEnv(gym.Env):
         """
         raise NotImplementedError
 
-    def _info(self, obs: Observation, action: Action | None = None) -> Infomation:
+    def _info(self, obs: Observation, action: Action | None = None) -> InformationDict:
         """
         Return a dictionary of additional information
 
@@ -206,7 +211,7 @@ class AbstractEnv(gym.Env):
         :param action: current action
         :return: info dict
         """
-        info = Infomation(
+        info = InformationDict(
             speed=self.vehicle.speed,
             crashed=self.vehicle.crashed,
             action=action,
@@ -222,7 +227,7 @@ class AbstractEnv(gym.Env):
         *,
         seed: int | None = None,
         options: dict | None = None,
-    ) -> tuple[Observation, Infomation]:
+    ) -> tuple[Observation, InformationDict]:
         """
         Reset the environment to it's initial configuration
 
@@ -253,7 +258,7 @@ class AbstractEnv(gym.Env):
         """
         raise NotImplementedError()
 
-    def step(self, action: Action) -> tuple[Observation, float, bool, bool, Infomation]:
+    def step(self, action: Action) -> tuple[Observation, float, bool, bool, InformationDict]:
         """
         Perform an action and step the environment dynamics.
 
