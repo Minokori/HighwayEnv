@@ -4,9 +4,10 @@ import copy
 import importlib
 import itertools
 from collections.abc import Callable
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Self, TypedDict
 
 import numpy as np
+from jaxtyping import Float
 from nptyping import Floating, NDArray, Shape
 
 from highway_env.vehicle.kinematics import Vehicle
@@ -19,15 +20,43 @@ from highway_env.vehicle.kinematics import Vehicle
 
 # TODO  we should try use numpy.typing to specify vector and matrix like below:
 
-Position = NDArray[Shape["2"], Floating]  # type: ignore
+Position = Float[np.ndarray, "2"]
 """A class representing a position in 2D space,
 as a numpy array of shape (2,) and dtype float."""
 
-Vector = np.ndarray[tuple[int], np.dtype[np.floating]]
+Polygon = Float[np.ndarray, "*, 2"]
+"""A class representing a polygon in 2D space,as a numpy array of shape (n, 2) and dtype float."""
+
+Vec2D = Float[np.ndarray, "2"]
+"""A class representing a 2D vector, as a numpy array of shape (2,) and dtype float.
+
+impact, velocity, heading, etc. can be represented as Vec2D."""
+
+
+class NewLaneIndex(tuple[str, str, int]):
+    """A class representing the index of a lane, as a tuple of (from_node, to_node, lane_id).
+
+    if lane_id is None, it will be set to -1, which means the lane_id is not specified.
+    """
+    EMPTY: "NewLaneIndex"
+    """an empty lane index, used for type checking,
+
+    value is ``("", "", -1)``
+    """
+
+    def __new__(cls, _from: str, to: str, lane_id: int | None) -> Self:
+        lane_id = lane_id if lane_id is not None else -1
+        return super().__new__(cls, (_from, to, lane_id))
+
+
+NewLaneIndex.EMPTY = NewLaneIndex("", "", None)
+
+
+Vector = NDArray[Shape["*"], Floating]  # type: ignore #np.ndarray[tuple[int], np.dtype[np.floating]]
 """An 1D ndarray, shape (n,)"""
-Matrix = np.ndarray[tuple[int, int], np.dtype[np.floating]]
+Matrix = NDArray[Shape["*, *"], Floating]  # type: ignore #np.ndarray[tuple[int, int], np.dtype[np.floating]]
 """An 2D ndarray, shape (m, n)"""
-Interval = Vector | Matrix | np.ndarray[tuple[int, int, int], np.dtype[np.floating]]
+Interval = Vector | Matrix | NDArray[Shape["*, *, *"], Floating]  # type: ignore #np.ndarray[tuple[int, int, int], np.dtype[np.floating]]
 """An 1D or 2D or 3D ndarray, shape (2,) or (2, n) or (2, m, n)"""
 
 
@@ -218,8 +247,8 @@ def interval_distance(min_a: float, max_a: float, min_b: float, max_b: float) ->
 
 
 def are_polygons_intersecting(
-    a: Matrix, b: Matrix, displacement_a: Vector, displacement_b: Vector
-) -> tuple[bool, bool, NDArray[np.float64] | None]:
+    a: Polygon, b: Polygon, displacement_a: Vec2D, displacement_b: Vec2D
+) -> tuple[bool, bool, np.ndarray| None]:
     """
     Checks if the two polygons are intersecting.
 

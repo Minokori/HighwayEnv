@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 from numpy.typing import NDArray
 
+from highway_env import utils
 from highway_env.road.lane import AbstractLane, LineType, StraightLane, lane_from_config
+from highway_env.utils import NewLaneIndex
 from highway_env.vehicle.objects import Landmark
 
 
@@ -17,12 +19,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # BUG some code assumes that lane_id is not None, but in some cases (e.g. when route is given but lane_id is not specified) it can be None, maybe change the type of lane_id to Optional[int] would be better.
-LaneIndex = tuple[str, str, int|None]
+LaneIndex = tuple[str, str, int | None]
 Route = list[LaneIndex]
 
 
 class RoadNetwork:
     graph: dict[str, dict[str, list[AbstractLane]]]
+    EMPTY: "RoadNetwork"
+    """an empty road network object, used for type checking"""
 
     def __init__(self):
         self.graph: dict[str, dict[str, list[AbstractLane]]] = {}
@@ -58,8 +62,8 @@ class RoadNetwork:
         return self.graph[_from][_to][_id]
 
     def get_closest_lane_index(
-        self, position: NDArray[np.float32], heading: float | None = None
-    ) -> LaneIndex:
+        self, position: utils.Position, heading: float | None = None
+    ) -> NewLaneIndex:
         """
         Get the index of the lane closest to a world position.
 
@@ -67,20 +71,21 @@ class RoadNetwork:
         :param heading: a heading angle [rad].
         :return: the index of the closest lane.
         """
-        indexes, distances = [], []
+        indexes: list[NewLaneIndex] = []
+        distances: list[float] = []
         for _from, to_dict in self.graph.items():
             for _to, lanes in to_dict.items():
                 for _id, l in enumerate(lanes):
                     distances.append(l.distance_with_heading(position, heading))
-                    indexes.append((_from, _to, _id))
+                    indexes.append(NewLaneIndex(_from, _to, _id))
         return indexes[int(np.argmin(distances))]
 
     def next_lane(
         self,
         current_index: LaneIndex,
-        route: Route|None = None,
-        position: NDArray[np.float32]|None = None,
-        np_random: np.random.RandomState = np.random, # type: ignore
+        route: Route | None = None,
+        position: NDArray[np.float32] | None = None,
+        np_random: np.random.RandomState = np.random,  # type: ignore
     ) -> LaneIndex:
         """
         Get the index of the next lane that should be followed after finishing the current lane.
@@ -347,14 +352,14 @@ class RoadNetwork:
         :return: position, heading
         """
 
-        def _get_route_head_with_id(route_:Route) -> LaneIndex:
+        def _get_route_head_with_id(route_: Route) -> LaneIndex:
             lane_index_ = route_[0]
             if lane_index_[2] is None:
                 # We know which road segment will be followed by the vehicle, but not which lane.
                 # Hypothesis: the vehicle will keep the same lane_id as the current one.
                 id_ = (
                     current_lane_index[2]
-                    if current_lane_index[2] # type: ignore
+                    if current_lane_index[2]  # type: ignore
                     < len(self.graph[current_lane_index[0]][current_lane_index[1]])
                     else 0
                 )
@@ -374,7 +379,7 @@ class RoadNetwork:
     def random_lane_index(self, np_random: np.random.Generator) -> LaneIndex:
         _from = np_random.choice(list(self.graph.keys()))
         _to = np_random.choice(list(self.graph[_from].keys()))
-        _id = np_random.integers(len(self.graph[_from][_to])) # type: ignore
+        _id = np_random.integers(len(self.graph[_from][_to]))  # type: ignore
         return _from, _to, int(_id)
 
     @classmethod
@@ -402,6 +407,13 @@ class RoadNetwork:
 class Road:
     """A road is a set of lanes, and a set of vehicles driving on these lanes."""
 
+    EMPTY: "Road"
+
+    def __bool__(self):
+        if self is Road.EMPTY:
+            return False
+        return True
+
     def __init__(
         self,
         network: RoadNetwork | None = None,
@@ -420,8 +432,8 @@ class Road:
         :param record_history: whether the recent trajectories of vehicles should be recorded for display
         """
         self.network: RoadNetwork = network  # type: ignore
-        self.vehicles:list[kinematics.Vehicle] = vehicles or []
-        self.objects:list[objects.RoadObject] =  [*road_objects] if road_objects else []
+        self.vehicles: list[kinematics.Vehicle] = vehicles or []
+        self.objects: list[objects.RoadObject] = [*road_objects] if road_objects else []
         self.np_random: np.random.Generator = np_random if np_random else np.random.default_rng()
         self.record_history: bool = record_history
 
@@ -466,7 +478,7 @@ class Road:
     ) -> list[kinematics.Vehicle]:
         return self.close_objects_to(
             vehicle, distance, count, see_behind, sort, vehicles_only=True
-        ) # type: ignore
+        )  # type: ignore
 
     def act(self) -> None:
         """Decide the actions of each entity on the road."""
@@ -524,3 +536,7 @@ class Road:
 
     def __repr__(self):
         return self.vehicles.__repr__()
+
+
+RoadNetwork.EMPTY = RoadNetwork()
+Road.EMPTY = Road(RoadNetwork.EMPTY)

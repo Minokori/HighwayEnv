@@ -15,6 +15,11 @@ from highway_env.utils import Vector, class_from_path, get_class_path, wrap_to_p
 class AbstractLane:
     """A lane on the road, described by its central curve."""
 
+    EMPTY: "AbstractLane"
+
+    def __bool__(self):
+        return False if self is AbstractLane.EMPTY else True
+
     if TYPE_CHECKING:
         forbidden: bool
         """is changing to this lane forbidden.
@@ -107,8 +112,8 @@ class AbstractLane:
     def on_lane(
         self,
         position: NDArray[np.float32],
-        longitudinal: float|None = None,
-        lateral: float|None = None,
+        longitudinal: float | None = None,
+        lateral: float | None = None,
         margin: float = 0,
     ) -> bool:
         """
@@ -145,7 +150,7 @@ class AbstractLane:
         return is_close
 
     def after_end(
-        self, position: NDArray[np.float32], longitudinal: float|None = None, lateral: float|None = None
+        self, position: NDArray[np.float32], longitudinal: float | None = None, lateral: float | None = None
     ) -> bool:
         if not longitudinal:
             longitudinal, _ = self.local_coordinates(position)
@@ -174,6 +179,9 @@ class AbstractLane:
         return wrap_to_pi(heading - self.heading_at(long_offset))
 
 
+AbstractLane.EMPTY = AbstractLane()
+
+
 class LineType(enum.Enum):
     """A lane side line type."""
 
@@ -191,7 +199,7 @@ class StraightLane(AbstractLane):
         start: Vector,
         end: Vector,
         width: float = AbstractLane.DEFAULT_WIDTH,
-        line_types: tuple[LineType, LineType]|None = None,
+        line_types: tuple[LineType, LineType] | None = None,
         forbidden: bool = False,
         speed_limit: float = 20,
         priority: int = 0,
@@ -216,7 +224,7 @@ class StraightLane(AbstractLane):
             self.end[1] - self.start[1], self.end[0] - self.start[0]
         )
         """the lane heading [rad]"""
-        self.length:float = np.linalg.norm(self.end - self.start)  # type: ignore
+        self.length: float = np.linalg.norm(self.end - self.start)  # type: ignore
         """the lane length [m]"""
         self.line_types: list[LineType] = [*line_types] if line_types else [LineType.STRIPED, LineType.STRIPED]
         """the type of lines on both sides of the lane"""
@@ -282,7 +290,7 @@ class SineLane(StraightLane):
         pulsation: float,
         phase: float,
         width: float = StraightLane.DEFAULT_WIDTH,
-        line_types: tuple[LineType, LineType]|None = None,
+        line_types: tuple[LineType, LineType] | None = None,
         forbidden: bool = False,
         speed_limit: float = 20,
         priority: int = 0,
@@ -357,21 +365,21 @@ class CircularLane(AbstractLane):
         end_phase: float,
         clockwise: bool = True,
         width: float = AbstractLane.DEFAULT_WIDTH,
-        line_types: tuple[LineType, LineType]|None = None,
+        line_types: tuple[LineType, LineType] | None = None,
         forbidden: bool = False,
         speed_limit: float = 20,
         priority: int = 0,
     ) -> None:
         super().__init__()
         self.center: NDArray[np.float32] = np.array(center)
-        self.radius:float = radius
-        self.start_phase:float = start_phase
-        self.end_phase:float = end_phase
+        self.radius: float = radius
+        self.start_phase: float = start_phase
+        self.end_phase: float = end_phase
         self.clockwise: bool = clockwise
         self.direction: int = 1 if clockwise else -1
         self.width: float = width
         self.line_types: list[LineType] = [*line_types] if line_types else [LineType.STRIPED, LineType.STRIPED]
-        self.forbidden:bool = forbidden
+        self.forbidden: bool = forbidden
         self.length: float = radius * (end_phase - start_phase) * self.direction
         self.priority: int = priority
         self.speed_limit: float = speed_limit
@@ -392,9 +400,9 @@ class CircularLane(AbstractLane):
 
     def local_coordinates(self, position: NDArray[np.float32]) -> tuple[float, float]:
         delta = position - self.center
-        phi:float = np.arctan2(delta[1], delta[0])
+        phi: float = np.arctan2(delta[1], delta[0])
         phi = self.start_phase + utils.wrap_to_pi(phi - self.start_phase)
-        r:float = np.linalg.norm(delta) # type: ignore
+        r: float = np.linalg.norm(delta)  # type: ignore
         longitudinal = self.direction * (phi - self.start_phase) * self.radius
         lateral = self.direction * (self.radius - r)
         return longitudinal, lateral  # type: ignore
@@ -431,12 +439,12 @@ class PolyLaneFixedWidth(AbstractLane):
         self,
         lane_points: list[tuple[float, float]],
         width: float = AbstractLane.DEFAULT_WIDTH,
-        line_types: tuple[LineType, LineType]|None = None,
+        line_types: tuple[LineType, LineType] | None = None,
         forbidden: bool = False,
         speed_limit: float = 20,
         priority: int = 0,
     ) -> None:
-        self.curve:LinearSpline2D = LinearSpline2D(lane_points)
+        self.curve: LinearSpline2D = LinearSpline2D(lane_points)
         self.length: float = self.curve.length
         self.width: float = width
         self.line_types: list[LineType] = [*line_types] if line_types else [LineType.STRIPED, LineType.STRIPED]
@@ -490,7 +498,7 @@ class PolyLane(PolyLaneFixedWidth):
         lane_points: list[tuple[float, float]],
         left_boundary_points: list[tuple[float, float]],
         right_boundary_points: list[tuple[float, float]],
-        line_types: tuple[LineType, LineType]|None = None,
+        line_types: tuple[LineType, LineType] | None = None,
         forbidden: bool = False,
         speed_limit: float = 20,
         priority: int = 0,

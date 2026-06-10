@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 from abc import ABC
-from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import numpy as np
 from numpy.typing import NDArray
 
 from highway_env import utils
+from highway_env.road.lane import AbstractLane
 
 
 if TYPE_CHECKING:
-    from highway_env.road.lane import AbstractLane
+
     from highway_env.road.road import Road
 
 LaneIndex = tuple[str, str, int]
@@ -29,8 +29,8 @@ class RoadObject(ABC):
 
     def __init__(
         self,
-        road: Road | None,
-        position: Sequence[float]|utils.Vector,
+        road: Road,
+        position: utils.Position,
         heading: float = 0,
         speed: float = 0,
     ):
@@ -40,34 +40,35 @@ class RoadObject(ABC):
         :param heading: the angle from positive direction of horizontal axis
         :param speed: cartesian speed of object in the surface
         """
-        # We assert in runtime that road is not None.
-        self.road: Road = road  # type: ignore
-        self.position: NDArray[np.float32] = np.array(position, dtype=np.float32)
-        self.heading:float = heading
+
+        self.road: Road = road
+        self.position: utils.Position = position
+        self.heading: float = heading
+        """the angle from positive direction of horizontal axis, in radians, in the range [-pi, pi]"""
         self.speed: float = speed
 
-        self.lane_index = (
+        self.lane_index: utils.NewLaneIndex = (
             self.road.network.get_closest_lane_index(self.position, self.heading)
             if self.road
-            else np.nan
+            else utils.NewLaneIndex.EMPTY
         )
         # assume if self.road is not None, then self.lane_index is not np.nan either, so we can safely get the lane;
-        self.lane = self.road.network.get_lane(self.lane_index) if self.road else None  # type: ignore
+        self.lane: AbstractLane = self.road.network.get_lane(self.lane_index) if self.road else AbstractLane.EMPTY  # type: ignore
 
         # Enable collision with other collidables
-        self.collidable = True
+        self.collidable: bool = True
 
         # Collisions have physical effects
-        self.solid = True
+        self.solid: bool = True
 
         # If False, this object will not check its own collisions, but it can still collides with other objects that do
         # check their collisions.
-        self.check_collisions = True
+        self.check_collisions: bool = True
 
-        self.diagonal = np.sqrt(self.LENGTH**2 + self.WIDTH**2)
-        self.crashed = False
-        self.hit = False
-        self.impact = np.zeros(self.position.shape)
+        self.diagonal: float = np.sqrt(self.LENGTH**2 + self.WIDTH**2)
+        self.crashed: bool = False
+        self.hit: bool = False
+        self.impact: utils.Vec2D = np.zeros(self.position.shape)
 
     @classmethod
     def make_on_lane(
@@ -76,7 +77,7 @@ class RoadObject(ABC):
         lane_index: LaneIndex,
         longitudinal: float,
         speed: float | None = None,
-    ) -> RoadObject:
+    ) -> Self:
         """
         Create a vehicle on a given lane at a longitudinal position.
 
@@ -163,15 +164,15 @@ class RoadObject(ABC):
         return d
 
     @property
-    def direction(self) -> NDArray[np.float32]:
+    def direction(self) -> utils.Vec2D:
         return np.array([np.cos(self.heading), np.sin(self.heading)])
 
     @property
-    def velocity(self) -> NDArray[np.float32]:
+    def velocity(self) -> utils.Vec2D:
         return self.speed * self.direction
 
-    def polygon(self) -> NDArray[np.float32]:
-        points = np.array(
+    def polygon(self) -> utils.Polygon:
+        points: utils.Polygon = np.array(
             [
                 [-self.LENGTH / 2, -self.WIDTH / 2],
                 [-self.LENGTH / 2, +self.WIDTH / 2],
@@ -228,17 +229,17 @@ class Obstacle(RoadObject):
     """Obstacles on the road."""
 
     def __init__(
-        self, road, position: Sequence[float], heading: float = 0, speed: float = 0
+        self, road, position: utils.Position, heading: float = 0, speed: float = 0
     ):
         super().__init__(road, position, heading, speed)
-        self.solid:bool = True
+        self.solid: bool = True
 
 
 class Landmark(RoadObject):
     """Landmarks of certain areas on the road that must be reached."""
 
     def __init__(
-        self, road, position: Sequence[float]|utils.Vector, heading: float = 0, speed: float = 0
+        self, road, position: utils.Position, heading: float = 0, speed: float = 0
     ):
         super().__init__(road, position, heading, speed)
-        self.solid:bool = False
+        self.solid: bool = False
