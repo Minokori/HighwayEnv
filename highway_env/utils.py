@@ -4,11 +4,10 @@ import copy
 import importlib
 import itertools
 from collections.abc import Callable
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 import numpy as np
-from git import TYPE_CHECKING
-from numpy.typing import NDArray
+from nptyping import Floating, NDArray, Shape
 
 from highway_env.vehicle.kinematics import Vehicle
 
@@ -19,12 +18,18 @@ from highway_env.vehicle.kinematics import Vehicle
 # Interval =NDArray[np.float64]|tuple[Vector, Vector]|tuple[Matrix, Matrix]|tuple[float, float]|list[Vector]|list[Matrix]|list[float]
 
 # TODO  we should try use numpy.typing to specify vector and matrix like below:
+
+Position = NDArray[Shape["2"], Floating]  # type: ignore
+"""A class representing a position in 2D space,
+as a numpy array of shape (2,) and dtype float."""
+
 Vector = np.ndarray[tuple[int], np.dtype[np.floating]]
 """An 1D ndarray, shape (n,)"""
 Matrix = np.ndarray[tuple[int, int], np.dtype[np.floating]]
 """An 2D ndarray, shape (m, n)"""
-Interval =Vector|Matrix | np.ndarray[tuple[int, int,int], np.dtype[np.floating]]
+Interval = Vector | Matrix | np.ndarray[tuple[int, int, int], np.dtype[np.floating]]
 """An 1D or 2D or 3D ndarray, shape (2,) or (2, n) or (2, m, n)"""
+
 
 class ActionDict(TypedDict):
     """A dictionary representation of an action, for use in MultiAgentAction."""
@@ -40,11 +45,12 @@ class ActionDict(TypedDict):
     mapped to the steering range defined in `ContinuousAction.steering_range`
     """
 
+
 def do_every(duration: float, timer: float) -> bool:
     return duration < timer
 
 
-def lmap(v: float, x:Interval, y: Interval) -> float:
+def lmap(v: float, x: Interval, y: Interval) -> float:
     """Linear map of value v with range x to desired range y."""
     return y[0] + (v - x[0]) * (y[1] - y[0]) / (x[1] - x[0])
 
@@ -195,15 +201,15 @@ def project_polygon(polygon: Matrix, axis: Matrix) -> tuple[float, float]:
     for p in polygon:
         if TYPE_CHECKING:
             assert isinstance(p, np.ndarray)
-        projected:float = p.dot(axis)
+        projected: float = p.dot(axis)
         if min_p is None or projected < min_p:
             min_p = projected
         if max_p is None or projected > max_p:
             max_p = projected
-    return min_p, max_p # type: ignore
+    return min_p, max_p  # type: ignore
 
 
-def interval_distance(min_a: float, max_a: float, min_b: float, max_b: float)->float:
+def interval_distance(min_a: float, max_a: float, min_b: float, max_b: float) -> float:
     """
     Calculate the distance between [minA, maxA] and [minB, maxB]
     The distance will be negative if the intervals overlap
@@ -227,7 +233,7 @@ def are_polygons_intersecting(
     """
     intersecting = will_intersect = True
     min_distance = np.inf
-    translation, translation_axis = None, None # type: ignore
+    translation, translation_axis = None, None  # type: ignore
     for polygon in [a, b]:
         for p1, p2 in zip(polygon, polygon[1:]):
             normal = np.array([-p2[1] + p1[1], p2[0] - p1[0]])
@@ -251,8 +257,8 @@ def are_polygons_intersecting(
                 break
             if abs(distance) < min_distance:
                 min_distance = abs(distance)
-                d:np.ndarray = a[:-1].mean(axis=0) - b[:-1].mean(axis=0)  # center difference
-                translation_axis:np.ndarray = normal if d.dot(normal) > 0 else -normal
+                d: np.ndarray = a[:-1].mean(axis=0) - b[:-1].mean(axis=0)  # center difference
+                translation_axis: np.ndarray = normal if d.dot(normal) > 0 else -normal
 
     if will_intersect:
         translation = min_distance * translation_axis
@@ -370,7 +376,7 @@ def is_consistent_dataset(data: dict, parameter_box: NDArray[np.float64]) -> boo
         return True
 
 
-def near_split(x, num_bins=None, size_bins=None)->list[int]: # type: ignore
+def near_split(x, num_bins=None, size_bins=None) -> list[int]:  # type: ignore
     """
     Split a number into several bins with near-even distribution.
 
@@ -420,8 +426,8 @@ def distance_to_rect(line: tuple[Vector, Vector], rect: list[Vector]):
     rqu = (q - r) @ u
     rqv = (q - r) @ v
     with np.errstate(divide="ignore", invalid="ignore"):
-        interval_1:list[float] = [(a - r) @ u / rqu, (b - r) @ u / rqu]  # type: ignore
-        interval_2:list[float] = [(a - r) @ v / rqv, (d - r) @ v / rqv]  # type: ignore
+        interval_1: list[float] = [(a - r) @ u / rqu, (b - r) @ u / rqu]  # type: ignore
+        interval_2: list[float] = [(a - r) @ v / rqv, (d - r) @ v / rqv]  # type: ignore
     interval_1 = interval_1 if rqu >= 0 else list(reversed(interval_1))
     interval_2 = interval_2 if rqv >= 0 else list(reversed(interval_2))
     if (
