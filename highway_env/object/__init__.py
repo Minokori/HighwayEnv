@@ -4,17 +4,15 @@ from abc import ABC
 from typing import TYPE_CHECKING, Self
 
 import numpy as np
-from numpy.typing import NDArray
+from jaxtyping import Float
 
 from highway_env import utils
 from highway_env.road.lane import AbstractLane
 
 
 if TYPE_CHECKING:
-
     from highway_env.road.road import Road
-
-LaneIndex = tuple[str, str, int]
+    from highway_env.vehicle.kinematics import Vehicle
 
 
 class RoadObject(ABC):
@@ -74,7 +72,7 @@ class RoadObject(ABC):
     def make_on_lane(
         cls,
         road: Road,
-        lane_index: LaneIndex,
+        lane_index: utils.NewLaneIndex,
         longitudinal: float,
         speed: float | None = None,
     ) -> Self:
@@ -91,7 +89,7 @@ class RoadObject(ABC):
         if speed is None:
             speed = lane.speed_limit
         return cls(
-            road, lane.position(longitudinal, 0), lane.heading_at(longitudinal), speed  # type: ignore
+            road, lane.position(longitudinal, 0), lane.heading_at(longitudinal), speed
         )
 
     def handle_collisions(self, other: RoadObject, dt: float = 0) -> None:
@@ -124,7 +122,7 @@ class RoadObject(ABC):
             if not other.solid:
                 other.hit = True
 
-    def _is_colliding(self, other: RoadObject, dt: float) -> tuple[bool, bool, NDArray[np.float64]]:
+    def _is_colliding(self, other: RoadObject, dt: float) -> tuple[bool, bool, utils.Vec2D]:
         # Fast spherical pre-check
         if (
             np.linalg.norm(other.position - self.position)
@@ -138,12 +136,17 @@ class RoadObject(ABC):
                 ),
             )
         # Accurate rectangular check
-        return utils.are_polygons_intersecting(
+
+        # for transition, we use (0,0) instead of None
+        intersecting, will_intersect, translation = utils.are_polygons_intersecting(
             self.polygon(), other.polygon(), self.velocity * dt, other.velocity * dt
-        )  # type: ignore
+        )
+        if translation is None:
+            translation = np.zeros(2)
+        return intersecting, will_intersect, translation
 
     # Just added for sake of compatibility
-    def to_dict(self, origin_vehicle=None, observe_intentions=True):
+    def to_dict(self, origin_vehicle: "Vehicle|None" = None, observe_intentions=True) -> dict[str, float]:
         d = {
             "presence": 1,
             "x": self.position[0],
@@ -172,7 +175,7 @@ class RoadObject(ABC):
         return self.speed * self.direction
 
     def polygon(self) -> utils.Polygon:
-        points: utils.Polygon = np.array(
+        points: Float[np.ndarray, "2,*"] = np.array(
             [
                 [-self.LENGTH / 2, -self.WIDTH / 2],
                 [-self.LENGTH / 2, +self.WIDTH / 2],
@@ -181,8 +184,8 @@ class RoadObject(ABC):
             ]
         ).T
         c, s = np.cos(self.heading), np.sin(self.heading)
-        rotation = np.array([[c, -s], [s, c]])
-        points = (rotation @ points).T + np.tile(self.position, (4, 1))
+        rotation: Float[np.ndarray, "2,2"] = np.array([[c, -s], [s, c]])
+        points: utils.Polygon = (rotation @ points).T + np.tile(self.position, (4, 1))
         return np.vstack([points, points[0:1]])
 
     def lane_distance_to(self, other: RoadObject, lane: AbstractLane | None = None) -> float:
@@ -197,11 +200,6 @@ class RoadObject(ABC):
             return np.nan
         if not lane:
             lane = self.lane
-
-        if TYPE_CHECKING:
-            # We assert in runtime that lane is not None.
-            assert lane is not None
-
         return (
             lane.local_coordinates(other.position)[0]
             - lane.local_coordinates(self.position)[0]
@@ -210,9 +208,6 @@ class RoadObject(ABC):
     @property
     def on_road(self) -> bool:
         """Is the object on its current lane, or off-road?"""
-        if TYPE_CHECKING:
-            # We assert in runtime that self.lane is not None.
-            assert self.lane is not None
         return self.lane.on_lane(self.position)
 
     def front_distance_to(self, other: RoadObject) -> float:
@@ -243,3 +238,6 @@ class Landmark(RoadObject):
     ):
         super().__init__(road, position, heading, speed)
         self.solid: bool = False
+
+
+__all__ = ["RoadObject", "Obstacle", "Landmark"]

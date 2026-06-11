@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pygame
 
-from highway_env.utils import Vector
+from highway_env.utils import Color, Vector
 from highway_env.vehicle.behavior import IDMVehicle, LinearVehicle
 from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.dynamics import BicycleVehicle
@@ -18,14 +18,14 @@ if TYPE_CHECKING:
 
 
 class VehicleGraphics:
-    RED = (255, 100, 100)
-    GREEN = (50, 200, 0)
-    BLUE = (100, 200, 255)
-    YELLOW = (200, 200, 0)
-    BLACK = (60, 60, 60)
-    PURPLE = (200, 0, 150)
-    DEFAULT_COLOR = YELLOW
-    EGO_COLOR = GREEN
+    RED: Color = (255, 100, 100)
+    GREEN: Color = (50, 200, 0)
+    BLUE: Color = (100, 200, 255)
+    YELLOW: Color = (200, 200, 0)
+    BLACK: Color = (60, 60, 60)
+    PURPLE: Color = (200, 0, 150)
+    DEFAULT_COLOR: Color = YELLOW
+    EGO_COLOR: Color = GREEN
 
     @classmethod
     def display(
@@ -149,7 +149,7 @@ class VehicleGraphics:
         image: pygame.SurfaceType,
         pos: Vector,
         angle: float,
-        origin_pos: Vector|None = None,
+        origin_pos: Vector | None = None,
         show_rect: bool = False,
     ) -> None:
         """Many thanks to https://stackoverflow.com/a/54714144."""
@@ -229,7 +229,7 @@ class VehicleGraphics:
             cls.display(v, surface, transparent=True, offscreen=offscreen)
 
     @classmethod
-    def get_color(cls, vehicle: Vehicle, transparent: bool = False) -> tuple[int,...]:
+    def get_color(cls, vehicle: Vehicle, transparent: bool = False) -> Color:
         color = cls.DEFAULT_COLOR
         if getattr(vehicle, "color", None):
             color = vehicle.color
@@ -246,7 +246,7 @@ class VehicleGraphics:
         return color
 
     @classmethod
-    def darken(cls, color, ratio=0.83):
+    def darken(cls, color: Color, ratio=0.83) -> Color:
         return (
             int(color[0] * ratio),
             int(color[1] * ratio),
@@ -254,9 +254,12 @@ class VehicleGraphics:
         ) + color[3:]
 
     @classmethod
-    def lighten(cls, color, ratio=0.68):
+    def lighten(cls, color: Color, ratio=0.68) -> Color:
         return (
             min(int(color[0] / ratio), 255),
             min(int(color[1] / ratio), 255),
             min(int(color[2] / ratio), 255),
         ) + color[3:]
+
+
+__all__ = ["VehicleGraphics"]

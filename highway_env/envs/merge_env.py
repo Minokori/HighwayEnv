@@ -7,7 +7,7 @@ from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
 from highway_env.road.lane import LineType, SineLane, StraightLane
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.vehicle.controller import ControlledVehicle
-from highway_env.vehicle.objects import Obstacle
+from highway_env.object.a import Obstacle
 
 
 class MergeEnvConfig(EnvironmentConfig):

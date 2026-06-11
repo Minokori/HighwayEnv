@@ -1,11 +1,12 @@
 import copy
+from typing import Self
 
 import numpy as np
 from torch import TYPE_CHECKING
 
 from highway_env import utils
-from highway_env.road.road import LaneIndex, Road, Route
-from highway_env.utils import ActionDict, Vector
+from highway_env.road.road import Road, Route
+from highway_env.utils import ActionDict, NewLaneIndex, Position, Vector
 from highway_env.vehicle.kinematics import Vehicle
 
 
@@ -35,21 +36,20 @@ class ControlledVehicle(Vehicle):
     def __init__(
         self,
         road: Road,
-        position: Vector,
+        position: Position,
         heading: float = 0,
         speed: float = 0,
-        target_lane_index: LaneIndex | None = None,
+        target_lane_index: NewLaneIndex | None = None,
         target_speed: float | None = None,
-        route:Route | None = None,
+        route: Route | None = None,
     ):
         super().__init__(road, position, heading, speed)
-        self.target_lane_index: LaneIndex = target_lane_index or self.lane_index
-        self.target_speed:float = target_speed or self.speed
-        # We assert in runtime that route is not None.
-        self.route:list[LaneIndex|tuple[str,str, None]] = route  # type: ignore
+        self.target_lane_index: NewLaneIndex = target_lane_index or self.lane_index
+        self.target_speed: float = target_speed or self.speed
+        self.route: Route = route if route else []
 
     @classmethod
-    def create_from(cls, vehicle: "ControlledVehicle") -> "ControlledVehicle":
+    def create_from(cls, vehicle: Self) -> Self:
         """
         Create a new vehicle from an existing one.
 
@@ -69,7 +69,7 @@ class ControlledVehicle(Vehicle):
         )
         return v
 
-    def plan_route_to(self, destination: str) -> "ControlledVehicle":
+    def plan_route_to(self, destination: str) -> Self:
         """
         Plan a route to a destination in the road network
 
@@ -81,7 +81,7 @@ class ControlledVehicle(Vehicle):
             path = []
         if path:
             self.route = [self.lane_index] + [
-                (path[i], path[i + 1], None) for i in range(len(path) - 1)
+                NewLaneIndex(path[i], path[i + 1], None) for i in range(len(path) - 1)
             ]
         else:
             self.route = [self.lane_index]
@@ -103,12 +103,7 @@ class ControlledVehicle(Vehicle):
             self.target_speed -= self.DELTA_SPEED
         elif action == "LANE_RIGHT":
             _from, _to, _id = self.target_lane_index
-
-            if TYPE_CHECKING:
-                # We assert in runtime that _id is not None.
-                assert _id is not None
-
-            target_lane_index = (
+            target_lane_index = NewLaneIndex(
                 _from,
                 _to,
                 np.clip(_id + 1, 0, len(self.road.network.graph[_from][_to]) - 1),
@@ -124,7 +119,7 @@ class ControlledVehicle(Vehicle):
                 # We assert in runtime that _id is not None.
                 assert _id is not None
 
-            target_lane_index = (
+            target_lane_index = NewLaneIndex(
                 _from,
                 _to,
                 np.clip(_id - 1, 0, len(self.road.network.graph[_from][_to]) - 1),
@@ -153,7 +148,7 @@ class ControlledVehicle(Vehicle):
                 np_random=self.road.np_random,
             )
 
-    def steering_control(self, target_lane_index: LaneIndex) -> float:
+    def steering_control(self, target_lane_index: NewLaneIndex) -> float:
         """
         Steer the vehicle to follow the center of an given lane.
 
@@ -224,7 +219,7 @@ class ControlledVehicle(Vehicle):
         next_destinations_from = list(next_destinations.keys())
         routes = [
             self.route[0: index + 1]
-            + [(self.route[index][1], destination, self.route[index][2])]
+            + [NewLaneIndex(self.route[index][1], destination, self.route[index][2])]
             for destination in next_destinations_from
         ]
         return routes
@@ -241,12 +236,12 @@ class ControlledVehicle(Vehicle):
         routes = self.get_routes_at_intersection()
         if routes:
             if _to == "random":
-                _to = self.road.np_random.integers(len(routes))
+                _to = int(self.road.np_random.integers(len(routes)))
             self.route = routes[_to % len(routes)]
 
     def predict_trajectory_constant_speed(
-        self, times: np.ndarray
-    ) -> tuple[list[np.ndarray], list[float]]:
+        self, times: Vector
+    ) -> tuple[tuple[np.ndarray], tuple[float]]:
         """
         Predict the future positions of the vehicle along its planned route, under constant speed
 
@@ -261,7 +256,8 @@ class ControlledVehicle(Vehicle):
             )
             for t in times
         ]
-        return tuple(zip(*pos_heads)) # type: ignore
+
+        return tuple(zip(*pos_heads))  # type: ignore
 
 
 class MDPVehicle(ControlledVehicle):
@@ -282,10 +278,10 @@ class MDPVehicle(ControlledVehicle):
         position: Vector,
         heading: float = 0,
         speed: float = 0,
-        target_lane_index: LaneIndex|None = None,
-        target_speed: float|None = None,
-        target_speeds: Vector|None = None,
-        route: Route|None = None,
+        target_lane_index: NewLaneIndex | None = None,
+        target_speed: float | None = None,
+        target_speeds: Vector | None = None,
+        route: Route | None = None,
     ) -> None:
         """
         Initializes an MDPVehicle
@@ -389,11 +385,11 @@ class MDPVehicle(ControlledVehicle):
         )
 
     def predict_trajectory(
-        self,
-        actions: list[ActionDict | str | None],
-        action_duration: float,
-        trajectory_timestep: float,
-        dt: float) -> list[ControlledVehicle]:
+            self,
+            actions: list[ActionDict | str | None],
+            action_duration: float,
+            trajectory_timestep: float,
+            dt: float) -> list[Self]:
         """
         Predict the future trajectory of the vehicle given a sequence of actions.
 
@@ -403,7 +399,7 @@ class MDPVehicle(ControlledVehicle):
         :param dt: the timestep of the simulation
         :return: the sequence of future states
         """
-        states = []
+        states: list[Self] = []
         v = copy.deepcopy(self)
         t = 0
         for action in actions:

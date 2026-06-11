@@ -4,41 +4,38 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pygame
-from numpy.typing import NDArray
 
+from highway_env.object import Landmark, Obstacle
 from highway_env.road.lane import AbstractLane, LineType
 from highway_env.road.road import Road
-from highway_env.utils import Vector
+from highway_env.utils import Color, Position
 from highway_env.vehicle.graphics import VehicleGraphics
-from highway_env.vehicle.objects import Landmark, Obstacle
 
 
 if TYPE_CHECKING:
-    from highway_env.vehicle.objects import RoadObject
-
-PositionType = tuple[float, float]|NDArray[np.float32]
+    from highway_env.object import RoadObject
 
 
 class WorldSurface(pygame.Surface):
     """A pygame Surface implementing a local coordinate system so that we can move and zoom in the displayed area."""
 
-    BLACK = (0, 0, 0)
-    GREY = (100, 100, 100)
-    GREEN = (50, 200, 0)
-    YELLOW = (200, 200, 0)
-    WHITE = (255, 255, 255)
-    INITIAL_SCALING = 5.5
-    INITIAL_CENTERING = [0.5, 0.5]
-    SCALING_FACTOR = 1.3
-    MOVING_FACTOR = 0.1
+    BLACK: Color = (0, 0, 0)
+    GREY: Color = (100, 100, 100)
+    GREEN: Color = (50, 200, 0)
+    YELLOW: Color = (200, 200, 0)
+    WHITE: Color = (255, 255, 255)
+    INITIAL_SCALING: float = 5.5
+    INITIAL_CENTERING: list[float] = [0.5, 0.5]
+    SCALING_FACTOR: float = 1.3
+    MOVING_FACTOR: float = 0.1
 
     def __init__(
         self, size: tuple[int, int], flags: object, surf: pygame.SurfaceType
     ) -> None:
         super().__init__(size, flags, surf)  # type: ignore
-        self.origin:Vector = np.array([0, 0])
-        self.scaling = self.INITIAL_SCALING
-        self.centering_position = self.INITIAL_CENTERING
+        self.origin: Position = np.array([0, 0])
+        self.scaling: float = self.INITIAL_SCALING
+        self.centering_position: list[float] = self.INITIAL_CENTERING
 
     def pix(self, length: float) -> int:
         """
@@ -59,7 +56,7 @@ class WorldSurface(pygame.Surface):
         """
         return self.pix(x - self.origin[0]), self.pix(y - self.origin[1])
 
-    def vec2pix(self, vec: PositionType) -> tuple[int, int]:
+    def vec2pix(self, vec: Position) -> tuple[int, int]:
         """
         Convert a world position [m] into a position in the surface [px].
 
@@ -68,7 +65,7 @@ class WorldSurface(pygame.Surface):
         """
         return self.pos2pix(vec[0], vec[1])
 
-    def is_visible(self, vec: PositionType, margin: int = 50) -> bool:
+    def is_visible(self, vec: Position, margin: int = 50) -> bool:
         """
         Is a position visible in the surface?
         :param vec: a position
@@ -81,7 +78,7 @@ class WorldSurface(pygame.Surface):
             and -margin < y < self.get_height() + margin
         )
 
-    def move_display_window_to(self, position: PositionType) -> None:
+    def move_display_window_to(self, position: Position) -> None:
         """
         Set the origin of the displayed area to center on a given world position.
 
@@ -263,7 +260,7 @@ class LaneGraphics:
         surface: WorldSurface,
         color: tuple[float],
         width: float,
-        draw_surface: pygame.Surface|None = None,
+        draw_surface: pygame.Surface | None = None,
     ) -> None:
         draw_surface = draw_surface or surface
         stripes_count = int(
@@ -351,12 +348,12 @@ class RoadGraphics:
 class RoadObjectGraphics:
     """A visualization of objects on the road."""
 
-    YELLOW = (200, 200, 0)
-    BLUE = (100, 200, 255)
-    RED = (255, 100, 100)
-    GREEN = (50, 200, 0)
-    BLACK = (60, 60, 60)
-    DEFAULT_COLOR = YELLOW
+    YELLOW: Color = (200, 200, 0)
+    BLUE: Color = (100, 200, 255)
+    RED: Color = (255, 100, 100)
+    GREEN: Color = (50, 200, 0)
+    BLACK: Color = (60, 60, 60)
+    DEFAULT_COLOR: Color = YELLOW
 
     @classmethod
     def display(
@@ -403,7 +400,7 @@ class RoadObjectGraphics:
         image: pygame.SurfaceType,
         pos: tuple[int, int],
         angle: float,
-        origin_pos: tuple[float, float]|None = None,
+        origin_pos: tuple[float, float] | None = None,
         show_rect: bool = False,
     ) -> None:
         """Many thanks to https://stackoverflow.com/a/54714144."""
@@ -441,7 +438,7 @@ class RoadObjectGraphics:
             pygame.draw.rect(surf, (255, 0, 0), (*origin, *rotated_image.get_size()), 2)
 
     @classmethod
-    def get_color(cls, object_: RoadObject, transparent: bool = False):
+    def get_color(cls, object_: RoadObject, transparent: bool = False) -> Color:
         color = cls.DEFAULT_COLOR
 
         if isinstance(object_, Obstacle):

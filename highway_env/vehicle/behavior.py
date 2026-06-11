@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Self
+
 import numpy as np
-from torch import TYPE_CHECKING
+from jaxtyping import Float
 
 from highway_env import utils
-from highway_env.road.road import LaneIndex, Road, Route
-from highway_env.utils import ActionDict, Vector
+from highway_env.road.road import Road, Route
+from highway_env.utils import ActionDict, NewLaneIndex, Vector
 from highway_env.vehicle.controller import ControlledVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
@@ -52,7 +54,7 @@ class IDMVehicle(ControlledVehicle):
         position: Vector,
         heading: float = 0,
         speed: float = 0,
-        target_lane_index: LaneIndex | None = None,
+        target_lane_index: NewLaneIndex | None = None,
         target_speed: float | None = None,
         route: Route | None = None,
         enable_lane_change: bool = True,
@@ -70,7 +72,7 @@ class IDMVehicle(ControlledVehicle):
         )
 
     @classmethod
-    def create_from(cls, vehicle: ControlledVehicle) -> IDMVehicle:
+    def create_from(cls, vehicle: Self) -> Self:
         """
         Create a new vehicle from an existing one.
 
@@ -91,7 +93,7 @@ class IDMVehicle(ControlledVehicle):
         )
         return v
 
-    def act(self, action: ActionDict | str | None = None):  # type: ignore
+    def act(self, action: ActionDict | str | None = None):
         """
         Execute an action.
 
@@ -102,21 +104,22 @@ class IDMVehicle(ControlledVehicle):
         """
         if self.crashed:
             return
-        action: ActionDict = {}  # type: ignore
+        # rename `action` to `_action` to avoid confusion with the method argument.
+        _action: ActionDict = {}  # type: ignore
         # Lateral: MOBIL
         self.follow_road()
         if self.enable_lane_change:
             self.change_lane_policy()
-        action["steering"] = self.steering_control(self.target_lane_index)
-        action["steering"] = np.clip(
-            action["steering"], -self.MAX_STEERING_ANGLE, self.MAX_STEERING_ANGLE
+        _action["steering"] = self.steering_control(self.target_lane_index)
+        _action["steering"] = np.clip(
+            _action["steering"], -self.MAX_STEERING_ANGLE, self.MAX_STEERING_ANGLE
         )
 
         # Longitudinal: IDM
         front_vehicle, rear_vehicle = self.road.neighbour_vehicles(
             self, self.lane_index
         )
-        action["acceleration"] = self.acceleration(
+        _action["acceleration"] = self.acceleration(
             ego_vehicle=self, front_vehicle=front_vehicle, rear_vehicle=rear_vehicle
         )
         # When changing lane, check both current and target lanes
@@ -127,15 +130,15 @@ class IDMVehicle(ControlledVehicle):
             target_idm_acceleration = self.acceleration(
                 ego_vehicle=self, front_vehicle=front_vehicle, rear_vehicle=rear_vehicle
             )
-            action["acceleration"] = min(
-                action["acceleration"], target_idm_acceleration
+            _action["acceleration"] = min(
+                _action["acceleration"], target_idm_acceleration
             )
         # action['acceleration'] = self.recover_from_stop(action['acceleration'])
-        action["acceleration"] = np.clip(
-            action["acceleration"], -self.ACC_MAX, self.ACC_MAX
+        _action["acceleration"] = np.clip(
+            _action["acceleration"], -self.ACC_MAX, self.ACC_MAX
         )
         # Skip ControlledVehicle.act(), or the command will be overridden.
-        Vehicle.act(self, action)
+        Vehicle.act(self, _action)
 
     def step(self, dt: float):
         """
@@ -267,7 +270,7 @@ class IDMVehicle(ControlledVehicle):
             if self.mobil(lane_index):
                 self.target_lane_index = lane_index
 
-    def mobil(self, lane_index: LaneIndex) -> bool:
+    def mobil(self, lane_index: NewLaneIndex) -> bool:
         """
         MOBIL lane change model: Minimizing Overall Braking Induced by a Lane change
 
@@ -281,10 +284,6 @@ class IDMVehicle(ControlledVehicle):
         # Is the maneuver unsafe for the new following vehicle?
         new_preceding, new_following = self.road.neighbour_vehicles(self, lane_index)
 
-        if TYPE_CHECKING:
-            # We assert in runtime that new_following is not None.
-            assert isinstance(new_following, ControlledVehicle)
-
         new_following_a = self.acceleration(
             ego_vehicle=new_following, front_vehicle=new_preceding
         )
@@ -297,12 +296,8 @@ class IDMVehicle(ControlledVehicle):
         # Do I have a planned route for a specific lane which is safe for me to access?
         old_preceding, old_following = self.road.neighbour_vehicles(self)
         self_pred_a = self.acceleration(ego_vehicle=self, front_vehicle=new_preceding)
-        if self.route and self.route[0][2] is not None:
+        if self.route and self.route[0][2] != -1:
             # Wrong direction
-
-            if TYPE_CHECKING:
-                assert self.target_lane_index[2] is not None and lane_index[2] is not None
-
             if np.sign(lane_index[2] - self.target_lane_index[2]) != np.sign(
                 self.route[0][2] - self.target_lane_index[2]
             ):
@@ -392,7 +387,7 @@ class LinearVehicle(IDMVehicle):
         position: Vector,
         heading: float = 0,
         speed: float = 0,
-        target_lane_index: LaneIndex | None = None,
+        target_lane_index: NewLaneIndex | None = None,
         target_speed: float | None = None,
         route: Route | None = None,
         enable_lane_change: bool = True,
@@ -461,7 +456,7 @@ class LinearVehicle(IDMVehicle):
         ego_vehicle: ControlledVehicle | None,
         front_vehicle: Vehicle | None = None,
         rear_vehicle: Vehicle | None = None,
-    ) -> np.ndarray:
+    ) -> Float[np.ndarray, "3"]:
         vt, dv, dp = 0, 0, 0
         if ego_vehicle:
             vt = (
@@ -478,7 +473,7 @@ class LinearVehicle(IDMVehicle):
                 dp = min(d - d_safe, 0)
         return np.array([vt, dv, dp])
 
-    def steering_control(self, target_lane_index: LaneIndex) -> float:
+    def steering_control(self, target_lane_index: NewLaneIndex) -> float:
         """
         Linear controller with respect to parameters.
 
@@ -494,7 +489,7 @@ class LinearVehicle(IDMVehicle):
             )
         )
 
-    def steering_features(self, target_lane_index: LaneIndex) -> np.ndarray:
+    def steering_features(self, target_lane_index: NewLaneIndex) -> Vector:
         """
         A collection of features used to follow a lane
 
@@ -515,7 +510,7 @@ class LinearVehicle(IDMVehicle):
         )
         return features
 
-    def longitudinal_structure(self):
+    def longitudinal_structure(self) -> tuple[Float[np.ndarray, "4, 4"], Float[np.ndarray, "3,4,4"]]:
         # Nominal dynamics: integrate speed
         A = np.array([[0, 0, 1, 0], [0, 0, 0, 1], [0, 0, 0, 0], [0, 0, 0, 0]])
         # Target speed dynamics
@@ -542,7 +537,7 @@ class LinearVehicle(IDMVehicle):
         phi = np.array([phi0, phi1, phi2])
         return A, phi
 
-    def lateral_structure(self):
+    def lateral_structure(self) -> tuple[Float[np.ndarray, "2, 2"], Float[np.ndarray, "2,2,2"]]:
         A = np.array([[0, 1], [0, 0]])
         phi0 = np.array([[0, 0], [0, -1]])
         phi1 = np.array([[0, 0], [-1, 0]])
@@ -553,7 +548,7 @@ class LinearVehicle(IDMVehicle):
         """Store features and outputs for parameter regression."""
         self.add_features(self.data, self.target_lane_index)
 
-    def add_features(self, data, lane_index, output_lane=None):
+    def add_features(self, data: dict[str, dict[str, list[np.ndarray]]], lane_index: NewLaneIndex, output_lane: NewLaneIndex | None = None):
         front_vehicle, rear_vehicle = self.road.neighbour_vehicles(self)
         features = self.acceleration_features(self, front_vehicle, rear_vehicle)
         output = np.dot(self.ACCELERATION_PARAMETERS, features)

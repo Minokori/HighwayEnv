@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
+from jaxtyping import Float
 from numpy.typing import NDArray
 
 from highway_env.road.road import Road
@@ -11,7 +12,7 @@ from highway_env.utils import Vector
 from highway_env.vehicle.kinematics import Vehicle
 
 
-def rk4(func: Callable[[float, Vector], Vector], state: Vector, dt: float = 0.01, t: float = 0, **kwargs) -> Vector:
+def rk4(func: Callable[[float, Float[np.ndarray, "*, 1"]], Float[np.ndarray, "*, 1"]], state: Float[np.ndarray, "*, 1"], dt: float = 0.01, t: float = 0, **kwargs) -> Vector:
     """
     single-step fourth-order numerical integration (RK4) method
     func: system of first order ODEs
@@ -47,16 +48,16 @@ class BicycleVehicle(Vehicle):
     MAX_ANGULAR_SPEED: float = 2 * np.pi  # [rad/s]
 
     def __init__(
-        self, road: Road | None, position: Vector, heading: float = 0, speed: float = 0
+        self, road: Road, position: Vector, heading: float = 0, speed: float = 0
     ) -> None:
         super().__init__(road, position, heading, speed)
-        self.lateral_speed = 0
-        self.yaw_rate = 0
+        self.lateral_speed: float = 0
+        self.yaw_rate: float = 0
         self.theta = None
         self.A_lat, self.B_lat = self.lateral_lpv_dynamics()
 
     @property
-    def state(self) -> NDArray[np.float64]:
+    def state(self) -> Float[np.ndarray, "*, 1"]:
         return np.array(
             [
                 [self.position[0]],
@@ -72,7 +73,7 @@ class BicycleVehicle(Vehicle):
     def derivative(self):
         return self.derivative_func(None, self.state)
 
-    def derivative_func(self, time: float | None, state: Vector, **kwargs) -> NDArray[np.float64]:
+    def derivative_func(self, time: float | None, state: Float[np.ndarray, "*, 1"], **kwargs) -> Float[np.ndarray, "*, 1"]:
         """
         See Chapter 2 of Lateral Vehicle Dynamics. Vehicle Dynamics and Control. Rajamani, R. (2011)
 
@@ -112,7 +113,7 @@ class BicycleVehicle(Vehicle):
         )
 
     @property
-    def derivative_linear(self) -> NDArray[np.float32]:
+    def derivative_linear(self) -> Float[np.ndarray, "*, 1"]:
         """
         Linearized lateral dynamics.
 
@@ -161,11 +162,13 @@ class BicycleVehicle(Vehicle):
             self.yaw_rate, -self.MAX_ANGULAR_SPEED, self.MAX_ANGULAR_SPEED
         )
 
-    def lateral_lpv_structure(self) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+    def lateral_lpv_structure(self) -> tuple[Float[np.ndarray, "2,2"], Float[np.ndarray, "1,2,2"], Float[np.ndarray, "2, 2"]]:
         """
         State: [lateral speed v, yaw rate r]
 
         :return: lateral dynamics A0, phi, B such that dx = (A0 + theta^T phi)x + B u
+
+            A0(2,2), phi(1,2,2), B(2,2)
         """
         B = np.array(
             [
@@ -206,7 +209,7 @@ class BicycleVehicle(Vehicle):
         )
         return A0, phi, B
 
-    def lateral_lpv_dynamics(self) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    def lateral_lpv_dynamics(self) -> tuple[Float[np.ndarray, "2,2"], Float[np.ndarray, "2, 2"]]:
         """
         State: [lateral speed v, yaw rate r]
 
@@ -217,7 +220,7 @@ class BicycleVehicle(Vehicle):
         A = A0 + np.tensordot(self.theta, phi, axes=(0, 0))
         return A, B
 
-    def full_lateral_lpv_structure(self) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+    def full_lateral_lpv_structure(self) -> tuple[Float[np.ndarray, "4,4"], Float[np.ndarray, "Any"], Float[np.ndarray, "Any"]]:
         """
         State: [position y, yaw psi, lateral speed v, yaw rate r]
 
@@ -244,7 +247,7 @@ class BicycleVehicle(Vehicle):
         B = np.concatenate((np.zeros((2, 1)), B_lat))
         return A0, phi, B
 
-    def full_lateral_lpv_dynamics(self) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    def full_lateral_lpv_dynamics(self) -> tuple[Float[np.ndarray, "Any"], Float[np.ndarray, "Any"]]:
         """
         State: [position y, yaw psi, lateral speed v, yaw rate r]
 
@@ -263,7 +266,7 @@ def simulate(dt: float = 0.1) -> None:
     import control  # pyright: ignore[reportMissingImports] # pylint: disable=import-error
 
     time = np.arange(0, 20, dt)
-    vehicle = BicycleVehicle(road=None, position=np.array([0, 5]), speed=8.3)
+    vehicle = BicycleVehicle(road=Road.EMPTY, position=np.array([0, 5]), speed=8.3)
     xx, uu = [], []
     from highway_env.interval import LPV
 
@@ -307,7 +310,7 @@ def simulate(dt: float = 0.1) -> None:
     plot(time, xx, uu)
 
 
-def plot(time: NDArray[np.float64], xx: NDArray[np.float32], uu: NDArray[np.float32]) -> None:
+def plot(time: NDArray[np.floating], xx: NDArray[np.float32], uu: NDArray[np.float32]) -> None:
     pos_x, pos_y = xx[:, 0, 0], xx[:, 1, 0]
     psi_x, psi_y = np.cos(xx[:, 2, 0]), np.sin(xx[:, 2, 0])
     dir_x, dir_y = np.cos(xx[:, 2, 0] + uu[:, 0, 0]), np.sin(xx[:, 2, 0] + uu[:, 0, 0])

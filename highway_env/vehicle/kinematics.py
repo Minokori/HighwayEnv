@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import copy
 from collections import deque
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import numpy as np
-from numpy.typing import NDArray
+from jaxtyping import Float
 
+from highway_env.object import RoadObject
 from highway_env.road.road import Road, Route
-from highway_env.utils import ActionDict, Vector
-from highway_env.vehicle.objects import RoadObject
+from highway_env.utils import ActionDict, Color, Position, Vec2D, Vector
 
 
 class Vehicle(RoadObject):
@@ -20,7 +20,7 @@ class Vehicle(RoadObject):
     It's state is propagated depending on its steering and acceleration actions.
     """
     if TYPE_CHECKING:
-        color: tuple[int, ...]
+        color: Color
         """Color of the vehicle, for display purposes.
 
         This field only exists in runtime.
@@ -67,17 +67,17 @@ class Vehicle(RoadObject):
 
     def __init__(
         self,
-        road: Road | None,
+        road: Road,
         position: Vector,
         heading: float = 0,
         speed: float = 0,
         predition_type: str = "constant_steering",
     ):
-        super().__init__(road, position, heading, speed)  # type: ignore
+        super().__init__(road, position, heading, speed)
         self.prediction_type = predition_type
         self.action: ActionDict = {"steering": 0, "acceleration": 0}
-        self.crashed:bool = False
-        self.impact: Vector | None = None
+        self.crashed: bool = False
+        self.impact: Vec2D = np.zeros(2)
         self.log = []
         self.history = deque(maxlen=self.HISTORY_SIZE)
 
@@ -90,7 +90,7 @@ class Vehicle(RoadObject):
         lane_to: str | None = None,
         lane_id: int | None = None,
         spacing: float = 1,
-    ) -> Vehicle:
+    ) -> Self:
         """
         Create a random vehicle on the road.
 
@@ -138,7 +138,7 @@ class Vehicle(RoadObject):
         return v
 
     @classmethod
-    def create_from(cls, vehicle: Vehicle) -> Vehicle:
+    def create_from(cls, vehicle: Vehicle) -> Self:
         """
         Create a new vehicle from an existing one.
 
@@ -178,10 +178,10 @@ class Vehicle(RoadObject):
             [np.cos(self.heading + beta), np.sin(self.heading + beta)]
         )
         self.position += v * dt
-        if self.impact is not None:
+        if any(self.impact != np.zeros(2)):
             self.position += self.impact
             self.crashed = True
-            self.impact = None
+            self.impact = np.zeros(2)
         self.heading += self.speed * np.sin(beta) / (self.LENGTH / 2) * dt
         self.speed += self.action["acceleration"] * dt
         self.on_state_update()
@@ -211,8 +211,8 @@ class Vehicle(RoadObject):
                 self.history.appendleft(self.create_from(self))
 
     def predict_trajectory_constant_speed(
-        self, times: NDArray[np.float64]
-    ) -> tuple[list[NDArray[np.float32]], list[float]]:
+        self, times: Vector
+    ) -> tuple[list[Position], list[float]]:
         if self.prediction_type == "zero_steering":
             action: ActionDict = {"acceleration": 0.0, "steering": 0.0}
         elif self.prediction_type == "constant_steering":
@@ -222,8 +222,8 @@ class Vehicle(RoadObject):
 
         dt = np.diff(np.concatenate(([0.0], times)))
 
-        positions = []
-        headings = []
+        positions: list[Position] = []
+        headings: list[float] = []
         v = copy.deepcopy(self)
         v.act(action)
         for t in dt:
@@ -233,11 +233,11 @@ class Vehicle(RoadObject):
         return (positions, headings)
 
     @property
-    def velocity(self) -> NDArray[np.float32]:
+    def velocity(self) -> Vec2D:
         return self.speed * self.direction  # TODO: slip angle beta should be used here
 
     @property
-    def destination(self) -> NDArray[np.float32]:
+    def destination(self) -> Position:
         if getattr(self, "route", None):
             last_lane_index = self.route[-1]
             last_lane_index = (
@@ -251,7 +251,7 @@ class Vehicle(RoadObject):
             return self.position
 
     @property
-    def destination_direction(self) -> NDArray[np.float64]:
+    def destination_direction(self) -> Vec2D:
         if (self.destination != self.position).any():
             return (self.destination - self.position) / np.linalg.norm(
                 self.destination - self.position
@@ -260,7 +260,8 @@ class Vehicle(RoadObject):
             return np.zeros((2,))
 
     @property
-    def lane_offset(self) -> NDArray[np.float64]:
+    def lane_offset(self) -> Float[np.ndarray, "3"]:
+        """longitudinal, lateral and angular offset to the lane center"""
         if self.lane is not None:
             long, lat = self.lane.local_coordinates(self.position)
             ang = self.lane.local_angle(self.heading, long)
@@ -270,7 +271,7 @@ class Vehicle(RoadObject):
 
     def to_dict(
         self, origin_vehicle: Vehicle | None = None, observe_intentions: bool = True
-    ) -> dict:
+    ) -> dict[str, float]:
         d = {
             "presence": 1,
             "x": self.position[0],
@@ -304,11 +305,11 @@ class Vehicle(RoadObject):
 
     def predict_trajectory(
         self,
-        actions: list,
+        actions: list[ActionDict | None],
         action_duration: float,
         trajectory_timestep: float,
         dt: float,
-    ) -> list[Vehicle]:
+    ) -> list[Self]:
         """
         Predict the future trajectory of the vehicle given a sequence of actions.
 
@@ -318,7 +319,7 @@ class Vehicle(RoadObject):
         :param dt: the timestep of the simulation
         :return: the sequence of future states
         """
-        states = []
+        states: list[Self] = []
         v = copy.deepcopy(self)
         t = 0
         for action in actions:

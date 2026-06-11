@@ -8,10 +8,11 @@ from typing import TYPE_CHECKING, Self, TypedDict
 
 import numpy as np
 from jaxtyping import Float
-from nptyping import Floating, NDArray, Shape
+from numpy.typing import NDArray
 
-from highway_env.vehicle.kinematics import Vehicle
 
+if TYPE_CHECKING:
+    from highway_env.road.lane import AbstractLane
 
 # Useful types
 # Vector = NDArray[np.float64]|  Sequence[float]
@@ -32,6 +33,9 @@ Vec2D = Float[np.ndarray, "2"]
 
 impact, velocity, heading, etc. can be represented as Vec2D."""
 
+Color = tuple[int, int, int] | tuple[int, int, int, int]
+"""A class representing a color, as a tuple of 3 or 4 integers in [0, 255]."""
+
 
 class NewLaneIndex(tuple[str, str, int]):
     """A class representing the index of a lane, as a tuple of (from_node, to_node, lane_id).
@@ -48,15 +52,18 @@ class NewLaneIndex(tuple[str, str, int]):
         lane_id = lane_id if lane_id is not None else -1
         return super().__new__(cls, (_from, to, lane_id))
 
+    def __bool__(self):
+        return self is not self.EMPTY
+
 
 NewLaneIndex.EMPTY = NewLaneIndex("", "", None)
 
 
-Vector = NDArray[Shape["*"], Floating]  # type: ignore #np.ndarray[tuple[int], np.dtype[np.floating]]
+Vector = Float[np.ndarray, "*"]  # type: ignore #np.ndarray[tuple[int], np.dtype[np.floating]]
 """An 1D ndarray, shape (n,)"""
-Matrix = NDArray[Shape["*, *"], Floating]  # type: ignore #np.ndarray[tuple[int, int], np.dtype[np.floating]]
+Matrix = Float[np.ndarray, "*, *"]  # type: ignore #np.ndarray[tuple[int, int], np.dtype[np.floating]]
 """An 2D ndarray, shape (m, n)"""
-Interval = Vector | Matrix | NDArray[Shape["*, *, *"], Floating]  # type: ignore #np.ndarray[tuple[int, int, int], np.dtype[np.floating]]
+Interval = Float[np.ndarray, "2"] | Float[np.ndarray, "2, *"] | Float[np.ndarray, "2, *, *"]
 """An 1D or 2D or 3D ndarray, shape (2,) or (2, n) or (2, m, n)"""
 
 
@@ -88,7 +95,7 @@ def get_class_path(cls: Callable) -> str:
     return cls.__module__ + "." + cls.__qualname__
 
 
-def class_from_path(path: str) -> type[Vehicle]:
+def class_from_path(path: str) -> type:
     module_name, class_name = path.rsplit(".", 1)
     class_object = getattr(importlib.import_module(module_name), class_name)
     return class_object
@@ -248,7 +255,7 @@ def interval_distance(min_a: float, max_a: float, min_b: float, max_b: float) ->
 
 def are_polygons_intersecting(
     a: Polygon, b: Polygon, displacement_a: Vec2D, displacement_b: Vec2D
-) -> tuple[bool, bool, np.ndarray| None]:
+) -> tuple[bool, bool, Vec2D | None]:
     """
     Checks if the two polygons are intersecting.
 

@@ -25,7 +25,7 @@ from highway_env.vehicle.kinematics import Vehicle
 
 
 if TYPE_CHECKING:
-    from highway_env.vehicle.objects import RoadObject
+    from highway_env.object.a import RoadObject
 
 Polytope = Tuple[np.ndarray, List[np.ndarray]]
 

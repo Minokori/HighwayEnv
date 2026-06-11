@@ -3,25 +3,26 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import numpy as np
+
 from highway_env import utils
+from highway_env.object import Obstacle
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.vehicle.controller import ControlledVehicle, MDPVehicle
 from highway_env.vehicle.kinematics import Vehicle
-from highway_env.vehicle.objects import Obstacle
 
 
 class RegulatedRoad(Road):
     # BUG It seems that it should have a default value
-    YIELDING_COLOR: tuple[int,...] = None  # type: ignore
+    YIELDING_COLOR: utils.Color = None  # type: ignore
     REGULATION_FREQUENCY: int = 2
     YIELD_DURATION: float = 0.0
 
     def __init__(
         self,
-        network: RoadNetwork|None = None,
-        vehicles: list[Vehicle]|None = None,
-        obstacles: Sequence[Obstacle]|None = None,
-        np_random: np.random.RandomState|None = None,
+        network: RoadNetwork | None = None,
+        vehicles: list[Vehicle] | None = None,
+        obstacles: Sequence[Obstacle] | None = None,
+        np_random: np.random.Generator | None = None,
         record_history: bool = False,
     ) -> None:
         super().__init__(network, vehicles, obstacles, np_random, record_history)

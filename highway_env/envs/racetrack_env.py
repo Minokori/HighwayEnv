@@ -8,7 +8,7 @@ from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
 from highway_env.road.lane import CircularLane, LineType, StraightLane
 from highway_env.road.road import LaneIndex, Road, RoadNetwork
 from highway_env.vehicle.behavior import IDMVehicle
-from highway_env.vehicle.objects import Obstacle
+from highway_env.object.a import Obstacle
 
 class RacetrackEnvConfig(EnvironmentConfig):
     duration:float
