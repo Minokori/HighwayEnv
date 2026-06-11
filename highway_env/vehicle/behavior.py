@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
+from typing_extensions import Self
 
 import numpy as np
 from jaxtyping import Float
 
 from highway_env import utils
 from highway_env.road.road import Road, Route
-from highway_env.utils import ActionDict, NewLaneIndex, Vector
+from highway_env.typing import ActionDict, NewLaneIndex, Vector
 from highway_env.vehicle.controller import ControlledVehicle
 from highway_env.vehicle.kinematics import Vehicle
 

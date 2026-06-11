@@ -9,7 +9,7 @@ from numpy.linalg import LinAlgError
 from numpy.typing import NDArray
 
 from highway_env.road.lane import AbstractLane
-from highway_env.utils import Interval, Matrix, Vector
+from highway_env.typing import Interval, Matrix, Vector
 
 
 def intervals_product(a: Interval, b: Interval) -> NDArray[np.float32]:
@@ -20,8 +20,8 @@ def intervals_product(a: Interval, b: Interval) -> NDArray[np.float32]:
     :param b: interval [b_min, b_max]
     :return: the interval of their product ab
     """
-    p = lambda x: np.maximum(x, 0)
-    n = lambda x: np.maximum(-x, 0)
+    def p(x): return np.maximum(x, 0)
+    def n(x): return np.maximum(-x, 0)
     return np.array(
         [
             np.dot(p(a[0]), p(b[0]))
@@ -44,8 +44,8 @@ def intervals_scaling(a: Interval, b: Interval) -> NDArray[np.float64]:
     :param b: interval [b_min, b_max]
     :return: the interval of their product ab
     """
-    p = lambda x: np.maximum(x, 0)
-    n = lambda x: np.maximum(-x, 0)
+    def p(x): return np.maximum(x, 0)
+    def n(x): return np.maximum(-x, 0)
     return np.array(
         [
             np.dot(p(a), b[0]) - np.dot(n(a), b[1]),
@@ -90,7 +90,7 @@ def integrator_interval(x: Interval, k: Interval) -> Interval:
         interval_gain = -k
     else:
         interval_gain = -np.array([k[0], k[0]])
-    return interval_gain * x # Note: no flip of x, contrary to using intervals_product(k,interval_minus(x))
+    return interval_gain * x  # Note: no flip of x, contrary to using intervals_product(k,interval_minus(x))
 
 
 def vector_interval_section(v_i: Interval, direction: Vector) -> NDArray[np.float32]:
@@ -183,13 +183,13 @@ class LPV:
         x0: Vector,
         a0: Matrix,
         da: list[Vector],
-        b: Matrix|None = None,
-        d: Matrix|None = None,
-        omega_i: Matrix|None = None,
-        u: Vector|None = None,
-        k: Matrix|None = None,
-        center: Vector|None = None,
-        x_i: Matrix|None = None,
+        b: Matrix | None = None,
+        d: Matrix | None = None,
+        omega_i: Matrix | None = None,
+        u: Vector | None = None,
+        k: Matrix | None = None,
+        center: Vector | None = None,
+        x_i: Matrix | None = None,
     ) -> None:
         """
         A Linear Parameter-Varying system:
@@ -207,30 +207,30 @@ class LPV:
         :param center: asymptotic state
         :param x_i: initial state interval
         """
-        self.x0:Vector = np.array(x0, dtype=float)
-        self.a0:Vector = np.array(a0, dtype=float)
-        self.da:list[Vector] = [np.array(da_i) for da_i in da]
-        self.b:Matrix = np.array(b) if b is not None else np.zeros((*self.x0.shape, 1))
-        self.d:Matrix = np.array(d) if d is not None else np.zeros((*self.x0.shape, 1))
-        self.omega_i:Matrix = np.array(omega_i) if omega_i is not None else np.zeros((2, 1))
-        self.u:Vector = np.array(u) if u is not None else np.zeros((1,))
-        self.k:Matrix = (
+        self.x0: Vector = np.array(x0, dtype=float)
+        self.a0: Vector = np.array(a0, dtype=float)
+        self.da: list[Vector] = [np.array(da_i) for da_i in da]
+        self.b: Matrix = np.array(b) if b is not None else np.zeros((*self.x0.shape, 1))
+        self.d: Matrix = np.array(d) if d is not None else np.zeros((*self.x0.shape, 1))
+        self.omega_i: Matrix = np.array(omega_i) if omega_i is not None else np.zeros((2, 1))
+        self.u: Vector = np.array(u) if u is not None else np.zeros((1,))
+        self.k: Matrix = (
             np.array(k)
             if k is not None
             else np.zeros((self.b.shape[1], self.b.shape[0]))
         )
-        self.center:Vector = (
+        self.center: Vector = (
             np.array(center) if center is not None else np.zeros(self.x0.shape)
         )
 
         # Closed-loop dynamics
         self.a0 += self.b @ self.k
 
-        self.coordinates:tuple[Matrix, Matrix]|None = None
+        self.coordinates: tuple[Matrix, Matrix] | None = None
 
-        self.x_t:Vector = self.x0
-        self.x_i:Matrix = np.array(x_i) if x_i is not None else np.array([self.x0, self.x0])
-        self.x_i_t:Vector|None = None
+        self.x_t: Vector = self.x0
+        self.x_i: Matrix = np.array(x_i) if x_i is not None else np.array([self.x0, self.x0])
+        self.x_i_t: Vector | None = None
 
         self.update_coordinates_frame(self.a0)
 
@@ -256,12 +256,12 @@ class LPV:
             self.coordinates = (np.eye(a0.shape[0]), np.eye(a0.shape[0]))
 
         # Forward coordinates change of states and models
-        self.a0 = self.change_coordinates(self.a0, matrix=True) # type: ignore
-        self.da = self.change_coordinates(self.da, matrix=True) # type: ignore
-        self.b = self.change_coordinates(self.b, offset=False)# type: ignore
+        self.a0 = self.change_coordinates(self.a0, matrix=True)  # type: ignore
+        self.da = self.change_coordinates(self.da, matrix=True)  # type: ignore
+        self.b = self.change_coordinates(self.b, offset=False)  # type: ignore
         self.x_i_t = np.array(self.change_coordinates([x for x in self.x_i]))
 
-    def set_control(self, control: NDArray[np.float64], state: NDArray[np.float64]|None = None) -> None:
+    def set_control(self, control: NDArray[np.float64], state: NDArray[np.float64] | None = None) -> None:
         if state is not None:
             control = (
                 control - self.k @ state
@@ -272,10 +272,10 @@ class LPV:
     # one for ndarray , returning an ndarray,
     # and one for list of ndarray, returning a list of ndarray
     @overload
-    def change_coordinates(self, value: NDArray[np.floating], matrix: bool = False, back: bool = False, interval: bool = False, offset: bool = True) -> NDArray[np.floating]:...
+    def change_coordinates(self, value: NDArray[np.floating], matrix: bool = False, back: bool = False, interval: bool = False, offset: bool = True) -> NDArray[np.floating]: ...
 
     @overload
-    def change_coordinates(self, value: list[NDArray[np.floating]], matrix: bool = False, back: bool = False, interval: bool = False, offset: bool = True) -> list[NDArray[np.floating]]:...
+    def change_coordinates(self, value: list[NDArray[np.floating]], matrix: bool = False, back: bool = False, interval: bool = False, offset: bool = True) -> list[NDArray[np.floating]]: ...
 
     def change_coordinates(
         self,
@@ -366,7 +366,7 @@ class LPV:
             + intervals_product(np.array([d, d]), omega_i)
             + np.array([bu, bu])
         )
-        return x_i + dx_i * dt # type: ignore
+        return x_i + dx_i * dt  # type: ignore
 
     def step_interval_predictor(self, x_i: Interval, dt: float) -> NDArray[np.float64]:
         """
@@ -384,8 +384,8 @@ class LPV:
             self.b,
             self.u,
         )
-        p = lambda x: np.maximum(x, 0)
-        n = lambda x: np.maximum(-x, 0)
+        def p(x): return np.maximum(x, 0)
+        def n(x): return np.maximum(-x, 0)
         da_p = sum(p(da_i) for da_i in da)
         da_n = sum(n(da_i) for da_i in da)
 

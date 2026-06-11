@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pygame
 
-from highway_env.utils import Color, Vector
+from highway_env.typing import Color, Vector
 from highway_env.vehicle.behavior import IDMVehicle, LinearVehicle
 from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.dynamics import BicycleVehicle

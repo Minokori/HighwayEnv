@@ -3,83 +3,12 @@ from __future__ import annotations
 import copy
 import importlib
 import itertools
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Self, TypedDict
+from typing import TYPE_CHECKING
 
 import numpy as np
-from jaxtyping import Float
 from numpy.typing import NDArray
 
-
-if TYPE_CHECKING:
-    from highway_env.road.lane import AbstractLane
-
-# Useful types
-# Vector = NDArray[np.float64]|  Sequence[float]
-# Matrix = NDArray[np.float64]|Sequence[Sequence[float]]
-# Interval =NDArray[np.float64]|tuple[Vector, Vector]|tuple[Matrix, Matrix]|tuple[float, float]|list[Vector]|list[Matrix]|list[float]
-
-# TODO  we should try use numpy.typing to specify vector and matrix like below:
-
-Position = Float[np.ndarray, "2"]
-"""A class representing a position in 2D space,
-as a numpy array of shape (2,) and dtype float."""
-
-Polygon = Float[np.ndarray, "*, 2"]
-"""A class representing a polygon in 2D space,as a numpy array of shape (n, 2) and dtype float."""
-
-Vec2D = Float[np.ndarray, "2"]
-"""A class representing a 2D vector, as a numpy array of shape (2,) and dtype float.
-
-impact, velocity, heading, etc. can be represented as Vec2D."""
-
-Color = tuple[int, int, int] | tuple[int, int, int, int]
-"""A class representing a color, as a tuple of 3 or 4 integers in [0, 255]."""
-
-
-class NewLaneIndex(tuple[str, str, int]):
-    """A class representing the index of a lane, as a tuple of (from_node, to_node, lane_id).
-
-    if lane_id is None, it will be set to -1, which means the lane_id is not specified.
-    """
-    EMPTY: "NewLaneIndex"
-    """an empty lane index, used for type checking,
-
-    value is ``("", "", -1)``
-    """
-
-    def __new__(cls, _from: str, to: str, lane_id: int | None) -> Self:
-        lane_id = lane_id if lane_id is not None else -1
-        return super().__new__(cls, (_from, to, lane_id))
-
-    def __bool__(self):
-        return self is not self.EMPTY
-
-
-NewLaneIndex.EMPTY = NewLaneIndex("", "", None)
-
-
-Vector = Float[np.ndarray, "*"]  # type: ignore #np.ndarray[tuple[int], np.dtype[np.floating]]
-"""An 1D ndarray, shape (n,)"""
-Matrix = Float[np.ndarray, "*, *"]  # type: ignore #np.ndarray[tuple[int, int], np.dtype[np.floating]]
-"""An 2D ndarray, shape (m, n)"""
-Interval = Float[np.ndarray, "2"] | Float[np.ndarray, "2, *"] | Float[np.ndarray, "2, *, *"]
-"""An 1D or 2D or 3D ndarray, shape (2,) or (2, n) or (2, m, n)"""
-
-
-class ActionDict(TypedDict):
-    """A dictionary representation of an action, for use in MultiAgentAction."""
-
-    acceleration: float
-    """the acceleration to apply, range in [-1,1],
-
-    mapped to the acceleration range defined in `ContinuousAction.acceleration_range`
-    """
-    steering: float
-    """the steering angle to apply, range in [-1,1],
-
-    mapped to the steering range defined in `ContinuousAction.steering_range`
-    """
+from highway_env.typing import *
 
 
 def do_every(duration: float, timer: float) -> bool:
@@ -91,7 +20,7 @@ def lmap(v: float, x: Interval, y: Interval) -> float:
     return y[0] + (v - x[0]) * (y[1] - y[0]) / (x[1] - x[0])
 
 
-def get_class_path(cls: Callable) -> str:
+def get_class_path(cls: type) -> str:
     return cls.__module__ + "." + cls.__qualname__
 
 

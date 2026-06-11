@@ -6,9 +6,9 @@ import numpy as np
 import pygame
 
 from highway_env.object import Landmark, Obstacle
-from highway_env.road.lane import AbstractLane, LineType
+from highway_env.road.lane import AbstractLane
 from highway_env.road.road import Road
-from highway_env.utils import Color, Position
+from highway_env.typing import Color, LineType, Position
 from highway_env.vehicle.graphics import VehicleGraphics
 
 

@@ -9,7 +9,7 @@ import numpy as np
 from highway_env import utils
 from highway_env.object import Landmark, RoadObject
 from highway_env.road.lane import AbstractLane, LineType, StraightLane, lane_from_config
-from highway_env.utils import NewLaneIndex, Position
+from highway_env.typing import NewLaneIndex, Position
 
 
 if TYPE_CHECKING:

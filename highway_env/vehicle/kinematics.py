@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import copy
 from collections import deque
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
+from typing_extensions import Self
 
 import numpy as np
 from jaxtyping import Float
 
 from highway_env.object import RoadObject
 from highway_env.road.road import Road, Route
-from highway_env.utils import ActionDict, Color, Position, Vec2D, Vector
+from highway_env.typing import ActionDict, Color, NewLaneIndex, Position, Vec2D, Vector
 
 
 class Vehicle(RoadObject):
@@ -112,7 +113,7 @@ class Vehicle(RoadObject):
             if lane_id is not None
             else road.np_random.choice(len(road.network.graph[_from][_to]))
         )
-        lane = road.network.get_lane((_from, _to, _id))
+        lane = road.network.get_lane(NewLaneIndex(_from, _to, _id))
         if speed is None:
             if lane.speed_limit is not None:
                 speed = road.np_random.uniform(
@@ -242,8 +243,8 @@ class Vehicle(RoadObject):
             last_lane_index = self.route[-1]
             last_lane_index = (
                 last_lane_index
-                if last_lane_index[-1] is not None
-                else (*last_lane_index[:-1], 0)
+                if last_lane_index[-1] >= 0
+                else NewLaneIndex(*last_lane_index[:-1], 0)
             )
             last_lane = self.road.network.get_lane(last_lane_index)
             return last_lane.position(last_lane.length, 0)

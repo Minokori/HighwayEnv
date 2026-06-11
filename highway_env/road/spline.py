@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from scipy import interpolate
 
-from highway_env.utils import Position, Vec2D, Vector
+from highway_env.typing import Position, Vec2D, Vector
 
 
 class LinearSpline2D:

@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-import enum
 from abc import ABCMeta, abstractmethod
 from typing import TYPE_CHECKING
 
 import numpy as np
 
-from highway_env import utils
 from highway_env.road.spline import LinearSpline2D
+from highway_env.typing import LineType, Position, Vec2D
 from highway_env.utils import (
-    Position,
-    Vec2D,
     class_from_path,
     get_class_path,
     wrap_to_pi,
@@ -185,15 +182,6 @@ class AbstractLane:
 
 
 AbstractLane.EMPTY = AbstractLane()
-
-
-class LineType(enum.Enum):
-    """A lane side line type."""
-
-    NONE = 0
-    STRIPED = 1
-    CONTINUOUS = 2
-    CONTINUOUS_LINE = 3
 
 
 class StraightLane(AbstractLane):
@@ -406,7 +394,7 @@ class CircularLane(AbstractLane):
     def local_coordinates(self, position: Position) -> tuple[float, float]:
         delta = position - self.center
         phi: float = np.arctan2(delta[1], delta[0])
-        phi = self.start_phase + utils.wrap_to_pi(phi - self.start_phase)
+        phi = self.start_phase + wrap_to_pi(phi - self.start_phase)
         r: float = np.linalg.norm(delta)  # type: ignore
         longitudinal = self.direction * (phi - self.start_phase) * self.radius
         lateral = self.direction * (self.radius - r)

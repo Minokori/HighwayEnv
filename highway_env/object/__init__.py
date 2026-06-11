@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
+from typing_extensions import Self
 
 import numpy as np
 from jaxtyping import Float
