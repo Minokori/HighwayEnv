@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 
-from highway_env.road.road import LaneIndex, Road, Route
-from highway_env.utils import Vector, confidence_polytope, is_consistent_dataset
+from highway_env.road.road import Road
+from highway_env.typing import ActionDict, NewLaneIndex, Route, Vector
+from highway_env.utils import confidence_polytope, is_consistent_dataset
 from highway_env.vehicle.behavior import LinearVehicle
 from highway_env.vehicle.uncertainty.prediction import IntervalVehicle, Polytope
 
@@ -32,8 +33,8 @@ class RegressionVehicle(IntervalVehicle):
             data, parameter_box=parameter_box
         )
         a, phi = structure()
-        a0 = a + np.tensordot(theta_n_lambda, phi, axes=[0, 0])
-        da = [np.tensordot(d_theta_k, phi, axes=[0, 0]) for d_theta_k in d_theta]
+        a0 = a + np.tensordot(theta_n_lambda, phi, axes=(0, 0))
+        da = np.array([np.tensordot(d_theta_k, phi, axes=(0, 0)) for d_theta_k in d_theta])
         return a0, da
 
 
@@ -44,12 +45,12 @@ class MultipleModelVehicle(LinearVehicle):
         position: Vector,
         heading: float = 0,
         speed: float = 0,
-        target_lane_index: LaneIndex = None,
-        target_speed: float = None,
-        route: Route = None,
+        target_lane_index: NewLaneIndex | None = None,
+        target_speed: float | None = None,
+        route: Route | None = None,
         enable_lane_change: bool = True,
-        timer: bool = None,
-        data: dict = None,
+        timer: bool | None = None,
+        data: dict | None = None,
     ) -> None:
         super().__init__(
             road,
@@ -66,7 +67,7 @@ class MultipleModelVehicle(LinearVehicle):
         if not self.data:
             self.data = []
 
-    def act(self, action: dict | str = None) -> None:
+    def act(self, action: ActionDict | str | None = None) -> None:
         if self.collecting_data:
             self.update_possible_routes()
         super().act(action)
@@ -90,8 +91,8 @@ class MultipleModelVehicle(LinearVehicle):
             for i, lane_index in enumerate(route):
                 route[i] = (
                     lane_index
-                    if lane_index[2] is not None
-                    else (lane_index[0], lane_index[1], 0)
+                    if lane_index[2] < 0
+                    else NewLaneIndex(lane_index[0], lane_index[1], 0)
                 )
             # Is this route already considered, or a suffix of a route already considered ?
             for known_route, _ in self.data:

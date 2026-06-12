@@ -9,16 +9,14 @@ import numpy as np
 from highway_env import utils
 from highway_env.object import Landmark, RoadObject
 from highway_env.road.lane import AbstractLane, LineType, StraightLane, lane_from_config
-from highway_env.typing import NewLaneIndex, Position
+from highway_env.typing import NewLaneIndex, Position, Route
 
 
+__all__ = ["RoadNetwork", "Road"]
 if TYPE_CHECKING:
-    from highway_env.vehicle import kinematics
+    from highway_env.vehicle.kinematics import Vehicle
 
 logger = logging.getLogger(__name__)
-
-# BUG some code assumes that lane_id is not None, but in some cases (e.g. when route is given but lane_id is not specified) it can be None
-Route = list[NewLaneIndex]
 
 
 class RoadNetwork:
@@ -416,7 +414,7 @@ class Road:
     def __init__(
         self,
         network: RoadNetwork | None = None,
-        vehicles: list[kinematics.Vehicle] | None = None,
+        vehicles: "list[Vehicle] | None" = None,
         road_objects: Sequence[RoadObject] | None = None,
         np_random: np.random.Generator | None = None,
         record_history: bool = False,
@@ -431,7 +429,7 @@ class Road:
         :param record_history: whether the recent trajectories of vehicles should be recorded for display
         """
         self.network: RoadNetwork = network if network else RoadNetwork.EMPTY
-        self.vehicles: list[kinematics.Vehicle] = vehicles or []
+        self.vehicles: list["Vehicle"] = vehicles or []
         self.objects: list[RoadObject] = [*road_objects] if road_objects else []
         self.np_random: np.random.Generator = np_random if np_random else np.random.default_rng()
         self.record_history: bool = record_history
@@ -439,18 +437,18 @@ class Road:
     @overload
     def close_objects_to(
         self,
-        vehicle: kinematics.Vehicle,
+        vehicle: "Vehicle",
         distance: float,
         count: int | None = None,
         see_behind: bool = True,
         sort: bool = True,
         vehicles_only: bool = True,
-    ) -> list[kinematics.Vehicle]: ...
+    ) -> list["Vehicle"]: ...
 
     @overload
     def close_objects_to(
         self,
-        vehicle: kinematics.Vehicle,
+        vehicle: "Vehicle",
         distance: float,
         count: int | None = None,
         see_behind: bool = True,
@@ -460,7 +458,7 @@ class Road:
 
     def close_objects_to(
         self,
-        vehicle: kinematics.Vehicle,
+        vehicle: "Vehicle",
         distance: float,
         count: int | None = None,
         see_behind: bool = True,
@@ -491,12 +489,12 @@ class Road:
 
     def close_vehicles_to(
         self,
-        vehicle: kinematics.Vehicle,
+        vehicle: "Vehicle",
         distance: float,
         count: int | None = None,
         see_behind: bool = True,
         sort: bool = True,
-    ) -> list[kinematics.Vehicle]:
+    ) -> list["Vehicle"]:
         return self.close_objects_to(
             vehicle, distance, count, see_behind, sort, vehicles_only=True
         )
@@ -521,8 +519,8 @@ class Road:
                 vehicle.handle_collisions(other, dt)
 
     def neighbour_vehicles(
-        self, vehicle: kinematics.Vehicle, lane_index: NewLaneIndex | None = None
-    ) -> tuple[kinematics.Vehicle | None, kinematics.Vehicle | None]:
+        self, vehicle: "Vehicle", lane_index: NewLaneIndex | None = None
+    ) -> "tuple[Vehicle | None, Vehicle | None]":
         """
         Find the preceding and following vehicles of a given vehicle.
 

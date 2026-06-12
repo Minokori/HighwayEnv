@@ -9,8 +9,19 @@ import numpy as np
 from jaxtyping import Float
 
 from highway_env.object import RoadObject
-from highway_env.road.road import Road, Route
-from highway_env.typing import ActionDict, Color, NewLaneIndex, Position, Vec2D, Vector
+from highway_env.road.road import Road
+from highway_env.typing import (
+    ActionDict,
+    Color,
+    NewLaneIndex,
+    Position,
+    Route,
+    Vec2D,
+    Vector,
+)
+
+
+__all__ = ["Vehicle"]
 
 
 class Vehicle(RoadObject):

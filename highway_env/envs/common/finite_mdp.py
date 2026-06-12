@@ -4,19 +4,23 @@ import importlib
 from functools import partial
 from typing import TYPE_CHECKING
 
-from highway_env.vehicle.controller import MDPVehicle
 import numpy as np
+from numpy.typing import NDArray
 
 from highway_env import utils
-from highway_env.vehicle.kinematics import Vehicle
+from highway_env.typing import Grid
+from highway_env.vehicle.controller import MDPVehicle
 
 
 if TYPE_CHECKING:
     from highway_env.envs.common.abstract import AbstractEnv
+    from highway_env.envs.highway_env import HighwayEnv
+    from highway_env.envs.merge_env import MergeEnv
+    from highway_env.envs.roundabout_env import RoundaboutEnv
 
 
 def finite_mdp(
-    env: AbstractEnv, time_quantization: float = 1.0, horizon: float = 10.0
+    env: "HighwayEnv|MergeEnv|RoundaboutEnv", time_quantization: float = 1.0, horizon: float = 10.0
 ) -> object:
     """
     Time-To-Collision (TTC) representation of the state.
@@ -47,9 +51,13 @@ def finite_mdp(
 
     # Compute current state
     grid_state = (env.vehicle.speed_index, env.vehicle.lane_index[2], 0)
-    state = np.ravel_multi_index(grid_state, grid.shape) # type: ignore
+    state = np.ravel_multi_index(grid_state, grid.shape)
 
     # Compute transition function
+
+    # @minokori only Discrete action space has field `n`
+    # so we assume that the action space is Discrete
+    
     transition_model_with_grid = partial(transition_model, grid=grid)
     transition = np.fromfunction(
         transition_model_with_grid, grid.shape + (env.action_space.n,), dtype=int
@@ -107,7 +115,7 @@ def compute_ttc_grid(
     time_quantization: float,
     horizon: float,
     vehicle: MDPVehicle | None = None,
-) -> np.ndarray:
+) -> Grid:
     """
     Compute the grid of predicted time-to-collision to each vehicle within the lane
 
@@ -120,7 +128,7 @@ def compute_ttc_grid(
     """
     vehicle = vehicle or env.vehicle
     road_lanes = env.road.network.all_side_lanes(env.vehicle.lane_index)
-    grid = np.zeros(
+    grid: Grid = np.zeros(
         (vehicle.target_speeds.size, len(road_lanes), int(horizon / time_quantization))
     )
     for speed_index in range(grid.shape[0]):
@@ -147,10 +155,10 @@ def compute_ttc_grid(
                     if len(env.road.network.all_side_lanes(other.lane_index)) == len(
                         env.road.network.all_side_lanes(vehicle.lane_index)
                     ):
-                        lane:list[int] = [other.lane_index[2]] # type: ignore
+                        lane: list[int] = [other.lane_index[2]]  # type: ignore
                     # Different road of different number of lanes: uncertainty on future lane, use all
                     else:
-                        lane:list[int]|range = range(grid.shape[1])
+                        lane: list[int] | range = range(grid.shape[1])
                     # Quantize time-to-collision to both upper and lower values
                     for time in [
                         int(time_to_collision / time_quantization),
@@ -164,7 +172,7 @@ def compute_ttc_grid(
     return grid
 
 
-def transition_model(h: int, i: int, j: int, a: int, grid: np.ndarray) -> np.ndarray:
+def transition_model(h: NDArray[np.intp], i: NDArray[np.intp], j: NDArray[np.intp], a: NDArray[np.int_], grid: Grid) -> NDArray[np.intp]:
     """
     Deterministic transition from a position in the grid to the next.
 
@@ -175,19 +183,19 @@ def transition_model(h: int, i: int, j: int, a: int, grid: np.ndarray) -> np.nda
     :param grid: ttc grid specifying the limits of speeds, lanes, time and actions
     """
     # Idle action (1) as default transition
-    next_state = clip_position(h, i, j + 1, grid)
-    left = a == 0
-    right = a == 2
-    faster = (a == 3) & (j == 0)
-    slower = (a == 4) & (j == 0)
-    next_state[left] = clip_position(h[left], i[left] - 1, j[left] + 1, grid)
-    next_state[right] = clip_position(h[right], i[right] + 1, j[right] + 1, grid)
-    next_state[faster] = clip_position(h[faster] + 1, i[faster], j[faster] + 1, grid)
-    next_state[slower] = clip_position(h[slower] - 1, i[slower], j[slower] + 1, grid)
+    next_state: NDArray[np.intp] = clip_position(h, i, j + 1, grid)
+    left: NDArray[np.bool_] = a == 0
+    right: NDArray[np.bool_] = a == 2
+    faster: NDArray[np.bool_] = (a == 3) & (j == 0)
+    slower: NDArray[np.bool_] = (a == 4) & (j == 0)
+    next_state[left] = clip_position(h[left], i[left] - 1, j[left] + 1, grid)  # pylint: disable=E1137
+    next_state[right] = clip_position(h[right], i[right] + 1, j[right] + 1, grid)  # pylint: disable=E1137
+    next_state[faster] = clip_position(h[faster] + 1, i[faster], j[faster] + 1, grid)  # pylint: disable=E1137
+    next_state[slower] = clip_position(h[slower] - 1, i[slower], j[slower] + 1, grid)  # pylint: disable=E1137
     return next_state
 
 
-def clip_position(h: int, i: int, j: int, grid: np.ndarray) -> np.ndarray:
+def clip_position(h: NDArray[np.intp], i: NDArray[np.intp], j: NDArray[np.intp], grid: Grid) -> NDArray[np.intp]:
     """
     Clip a position in the TTC grid, so that it stays within bounds.
 

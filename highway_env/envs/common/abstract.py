@@ -17,13 +17,14 @@ from highway_env.envs.common.graphics import EnvViewer
 from highway_env.envs.common.observation import ObservationType, observation_factory
 from highway_env.road.road import Road
 from highway_env.vehicle.behavior import IDMVehicle
-from highway_env.vehicle.controller import ControlledVehicle, MDPVehicle
+from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
 
 Observation = TypeVar("Observation")
 
-class EnvironmentConfig(TypedDict, total =False):
+
+class EnvironmentConfig(TypedDict, total=False):
     observation: dict
     action: dict
     simulation_frequency: int
@@ -45,12 +46,10 @@ class EnvironmentConfig(TypedDict, total =False):
     real_time_rendering: bool
 
 
-
-
 class InformationDict(TypedDict):
     speed: float
     crashed: bool
-    action: Action|None
+    action: Action | None
     rewards: NotRequired[dict[str, float]]
     # TODO check  if these fields are optional
     is_success: NotRequired[bool]  # parking
@@ -75,7 +74,7 @@ class AbstractEnv(gym.Env):
     PERCEPTION_DISTANCE = 5.0 * Vehicle.MAX_SPEED
     """The maximum distance of any vehicle present in the observation [m]"""
 
-    def __init__(self, config: EnvironmentConfig|dict|None = None, render_mode: str | None = None) -> None:
+    def __init__(self, config: EnvironmentConfig | dict | None = None, render_mode: str | None = None) -> None:
         super().__init__()
 
         # Configuration
@@ -83,14 +82,14 @@ class AbstractEnv(gym.Env):
         self.configure(config)
 
         # Scene
-        self.road:Road = None # type: ignore
+        self.road: Road = None  # type: ignore
         self.controlled_vehicles = []
 
         # Spaces
-        self.action_type= None# type: ignore
-        self.action_space = None # type: ignore
-        self.observation_type = None # type: ignore
-        self.observation_space = None # type: ignore
+        self.action_type = None  # type: ignore
+        self.action_space = None  # type: ignore
+        self.observation_type = None  # type: ignore
+        self.observation_space = None  # type: ignore
 
         # after define_spaces() is called, None values should have been replaced by actual spaces and types
         self.define_spaces()
@@ -101,7 +100,7 @@ class AbstractEnv(gym.Env):
         self.done = False
 
         # Rendering
-        self.viewer:EnvViewer|None = None
+        self.viewer: EnvViewer | None = None
         self._record_video_wrapper = None
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -113,10 +112,10 @@ class AbstractEnv(gym.Env):
     def vehicle(self) -> MDPVehicle:
         """First (default) controlled vehicle."""
         # TODO: this shouldn't be None in runtime
-        return self.controlled_vehicles[0] if self.controlled_vehicles else None # type: ignore
+        return self.controlled_vehicles[0] if self.controlled_vehicles else None  # type: ignore
 
     @vehicle.setter
-    def vehicle(self, vehicle: ControlledVehicle) -> None:
+    def vehicle(self, vehicle: MDPVehicle) -> None:
         """Set a unique controlled vehicle."""
         self.controlled_vehicles = [vehicle]
 
@@ -145,7 +144,7 @@ class AbstractEnv(gym.Env):
             "real_time_rendering": False,
         }
 
-    def configure(self, config: EnvironmentConfig|dict|None) -> None:
+    def configure(self, config: EnvironmentConfig | dict | None) -> None:
         if config:
             self.config.update(config)
 
@@ -175,7 +174,7 @@ class AbstractEnv(gym.Env):
         """
         raise NotImplementedError
 
-    def _rewards(self, action: Action|None) -> dict[str, float]:
+    def _rewards(self, action: Action | None) -> dict[str, float]:
         """
         Returns a multi-objective vector of rewards.
 
@@ -411,7 +410,7 @@ class AbstractEnv(gym.Env):
                 vehicles[i] = vehicle_class.create_from(v)
         return env_copy
 
-    def set_preferred_lane(self, preferred_lane: int|None = None) -> AbstractEnv:
+    def set_preferred_lane(self, preferred_lane: int | None = None) -> AbstractEnv:
         env_copy = copy.deepcopy(self)
         if preferred_lane:
             for v in env_copy.road.vehicles:

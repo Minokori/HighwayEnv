@@ -5,14 +5,16 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, overload
 
 import numpy as np
+from jaxtyping import Float
+from matplotlib.pylab import ndarray
 from numpy.linalg import LinAlgError
 from numpy.typing import NDArray
 
 from highway_env.road.lane import AbstractLane
-from highway_env.typing import Interval, Matrix, Vector
+from highway_env.typing import Interval, Matrix, Polytope, Vector
 
 
-def intervals_product(a: Interval, b: Interval) -> NDArray[np.float32]:
+def intervals_product(a: Interval, b: Interval) -> Interval:
     """
     Compute the product of two intervals
 
@@ -20,8 +22,11 @@ def intervals_product(a: Interval, b: Interval) -> NDArray[np.float32]:
     :param b: interval [b_min, b_max]
     :return: the interval of their product ab
     """
-    def p(x): return np.maximum(x, 0)
-    def n(x): return np.maximum(-x, 0)
+    def p(x: NDArray[np.floating]) -> NDArray[np.floating]:
+        return np.maximum(x, 0)
+
+    def n(x: NDArray[np.floating]) -> NDArray[np.floating]:
+        return np.maximum(-x, 0)
     return np.array(
         [
             np.dot(p(a[0]), p(b[0]))
@@ -36,7 +41,7 @@ def intervals_product(a: Interval, b: Interval) -> NDArray[np.float32]:
     )
 
 
-def intervals_scaling(a: Interval, b: Interval) -> NDArray[np.float64]:
+def intervals_scaling(a: Matrix, b: Interval) -> Interval:
     """
     Scale an intervals
 
@@ -44,8 +49,11 @@ def intervals_scaling(a: Interval, b: Interval) -> NDArray[np.float64]:
     :param b: interval [b_min, b_max]
     :return: the interval of their product ab
     """
-    def p(x): return np.maximum(x, 0)
-    def n(x): return np.maximum(-x, 0)
+    def p(x: Matrix) -> Matrix:
+        return np.maximum(x, 0)
+
+    def n(x: Matrix) -> Matrix:
+        return np.maximum(-x, 0)
     return np.array(
         [
             np.dot(p(a), b[0]) - np.dot(n(a), b[1]),
@@ -54,7 +62,7 @@ def intervals_scaling(a: Interval, b: Interval) -> NDArray[np.float64]:
     )
 
 
-def intervals_diff(a: Interval, b: Interval) -> NDArray[np.float64]:
+def intervals_diff(a: Interval, b: Interval) -> Interval:
     """
     Compute the difference of two intervals
 
@@ -65,7 +73,7 @@ def intervals_diff(a: Interval, b: Interval) -> NDArray[np.float64]:
     return np.array([a[0] - b[1], a[1] - b[0]])
 
 
-def interval_negative_part(a: Interval) -> NDArray[np.float64]:
+def interval_negative_part(a: Interval) -> Interval:
     """
     Compute the negative part of an interval
 
@@ -93,8 +101,8 @@ def integrator_interval(x: Interval, k: Interval) -> Interval:
     return interval_gain * x  # Note: no flip of x, contrary to using intervals_product(k,interval_minus(x))
 
 
-def vector_interval_section(v_i: Interval, direction: Vector) -> NDArray[np.float32]:
-    corners = [
+def vector_interval_section(v_i: Interval, direction: Vector) -> Interval:
+    corners: list[list[float]] = [
         [v_i[0, 0], v_i[0, 1]],
         [v_i[0, 0], v_i[1, 1]],
         [v_i[1, 0], v_i[0, 1]],
@@ -105,8 +113,9 @@ def vector_interval_section(v_i: Interval, direction: Vector) -> NDArray[np.floa
 
 
 def interval_absolute_to_local(
-    position_i: Interval, lane: AbstractLane
-) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
+    position_i: Interval,
+    lane: AbstractLane
+) -> tuple[Interval, Interval]:
     """
     Converts an interval in absolute x,y coordinates to an interval in local (longiturinal, lateral) coordinates
 
@@ -114,7 +123,7 @@ def interval_absolute_to_local(
     :param lane: the lane giving the local frame
     :return: the corresponding local interval
     """
-    position_corners = np.array(
+    position_corners: Float[ndarray, "4 2"] = np.array(
         [
             [position_i[0, 0], position_i[0, 1]],
             [position_i[0, 0], position_i[1, 1]],
@@ -154,7 +163,7 @@ def interval_local_to_absolute(
 
 def polytope(
     parametrized_f: Callable[[NDArray[np.float32]], NDArray[np.float32]], params_intervals: NDArray[np.float32]
-) -> tuple[NDArray[np.float32], list[NDArray[np.float32]]]:
+) -> Polytope:
     """
     Get a matrix polytope from a parametrized matrix function and parameter box
 
@@ -169,11 +178,11 @@ def polytope(
     for vertex_id in vertices_id:
         params_vertex = params_intervals[vertex_id, np.arange(len(vertex_id))]
         d_a.append(parametrized_f(params_vertex) - parametrized_f(params_means))
-    d_a = list({str(d_a_i): d_a_i for d_a_i in d_a}.values())
+    d_a = np.array(list({str(d_a_i): d_a_i for d_a_i in d_a}.values()))
     return a0, d_a
 
 
-def is_metzler(matrix: NDArray[np.float32], eps: float = 1e-9) -> bool:
+def is_metzler(matrix: Matrix, eps: float = 1e-9) -> bool:
     return bool((matrix - np.diag(np.diag(matrix)) >= -eps).all())
 
 
@@ -182,7 +191,7 @@ class LPV:
         self,
         x0: Vector,
         a0: Matrix,
-        da: list[Vector],
+        da: list[Vector] | Float[np.ndarray, "* * *"],
         b: Matrix | None = None,
         d: Matrix | None = None,
         omega_i: Matrix | None = None,
@@ -230,7 +239,7 @@ class LPV:
 
         self.x_t: Vector = self.x0
         self.x_i: Matrix = np.array(x_i) if x_i is not None else np.array([self.x0, self.x0])
-        self.x_i_t: Vector | None = None
+        self.x_i_t: Vector = None  # type: ignore
 
         self.update_coordinates_frame(self.a0)
 

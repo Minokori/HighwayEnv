@@ -1,0 +1,226 @@
+from __future__ import annotations
+
+from abc import ABC
+from typing import TYPE_CHECKING
+from typing_extensions import Self
+
+import numpy as np
+from jaxtyping import Float
+
+from highway_env.road.lane import AbstractLane
+from highway_env.typing import NewLaneIndex, Polygon, Position, Vec2D
+from highway_env.utils import are_polygons_intersecting
+
+
+if TYPE_CHECKING:
+    from highway_env.road.road import Road
+    from highway_env.vehicle.kinematics import Vehicle
+__all__ = ["RoadObject"]
+
+
+class RoadObject(ABC):
+    """
+    Common interface for objects that appear on the road.
+
+    For now we assume all objects are rectangular.
+    """
+
+    LENGTH: float = 2  # Object length [m]
+    WIDTH: float = 2  # Object width [m]
+
+    def __init__(
+        self,
+        road: "Road",
+        position: Position,
+        heading: float = 0,
+        speed: float = 0,
+    ):
+        """
+        :param road: the road instance where the object is placed in
+        :param position: cartesian position of object in the surface
+        :param heading: the angle from positive direction of horizontal axis
+        :param speed: cartesian speed of object in the surface
+        """
+
+        self.road: "Road" = road
+        self.position: Position = position
+        self.heading: float = heading
+        """the angle from positive direction of horizontal axis, in radians, in the range [-pi, pi]"""
+        self.speed: float = speed
+
+        self.lane_index: NewLaneIndex = (
+            self.road.network.get_closest_lane_index(self.position, self.heading)
+            if self.road
+            else NewLaneIndex.EMPTY
+        )
+        # assume if self.road is not None, then self.lane_index is not np.nan either, so we can safely get the lane;
+        self.lane: AbstractLane = self.road.network.get_lane(self.lane_index) if self.road else AbstractLane.EMPTY  # type: ignore
+
+        # Enable collision with other collidables
+        self.collidable: bool = True
+
+        # Collisions have physical effects
+        self.solid: bool = True
+
+        # If False, this object will not check its own collisions, but it can still collides with other objects that do
+        # check their collisions.
+        self.check_collisions: bool = True
+
+        self.diagonal: float = np.sqrt(self.LENGTH**2 + self.WIDTH**2)
+        self.crashed: bool = False
+        self.hit: bool = False
+        self.impact: Vec2D = np.zeros(self.position.shape)
+
+    @classmethod
+    def make_on_lane(
+        cls,
+        road: "Road",
+        lane_index: NewLaneIndex,
+        longitudinal: float,
+        speed: float | None = None,
+    ) -> Self:
+        """
+        Create a vehicle on a given lane at a longitudinal position.
+
+        :param road: a road object containing the road network
+        :param lane_index: index of the lane where the object is located
+        :param longitudinal: longitudinal position along the lane
+        :param speed: initial speed in [m/s]
+        :return: a RoadObject at the specified position
+        """
+        lane = road.network.get_lane(lane_index)
+        if speed is None:
+            speed = lane.speed_limit
+        return cls(
+            road, lane.position(longitudinal, 0), lane.heading_at(longitudinal), speed
+        )
+
+    def handle_collisions(self, other: RoadObject, dt: float = 0) -> None:
+        """
+        Check for collision with another vehicle.
+
+        :param other: the other vehicle or object
+        :param dt: timestep to check for future collisions (at constant velocity)
+        """
+        if other is self or not (self.check_collisions or other.check_collisions):
+            return
+        if not (self.collidable and other.collidable):
+            return
+        intersecting, will_intersect, transition = self._is_colliding(other, dt)
+        if will_intersect:
+            if self.solid and other.solid:
+                # @Minokori we use type name check here,
+                # to make the implementation of RoadObject could be defined
+                # in other *.py files.
+                if type(other).__name__ == "Obstacle":
+                    self.impact = transition
+                elif type(self).__name__ == "Obstacle":
+                    other.impact = transition
+                else:
+                    self.impact = transition / 2
+                    other.impact = -transition / 2
+        if intersecting:
+            if self.solid and other.solid:
+                self.crashed = True
+                other.crashed = True
+            if not self.solid:
+                self.hit = True
+            if not other.solid:
+                other.hit = True
+
+    def _is_colliding(self, other: RoadObject, dt: float) -> tuple[bool, bool, Vec2D]:
+        # Fast spherical pre-check
+        if (
+            np.linalg.norm(other.position - self.position)
+            > (self.diagonal + other.diagonal) / 2 + self.speed * dt
+        ):
+            return (
+                False,
+                False,
+                np.zeros(
+                    2,
+                ),
+            )
+        # Accurate rectangular check
+
+        # for transition, we use (0,0) instead of None
+        intersecting, will_intersect, translation = are_polygons_intersecting(
+            self.polygon(), other.polygon(), self.velocity * dt, other.velocity * dt
+        )
+        if translation is None:
+            translation = np.zeros(2)
+        return intersecting, will_intersect, translation
+
+    # Just added for sake of compatibility
+    def to_dict(self, origin_vehicle: "Vehicle|None" = None, observe_intentions=True) -> dict[str, float]:
+        d = {
+            "presence": 1,
+            "x": self.position[0],
+            "y": self.position[1],
+            "vx": 0.0,
+            "vy": 0.0,
+            "cos_h": np.cos(self.heading),
+            "sin_h": np.sin(self.heading),
+            "cos_d": 0.0,
+            "sin_d": 0.0,
+        }
+        if not observe_intentions:
+            d["cos_d"] = d["sin_d"] = 0
+        if origin_vehicle:
+            origin_dict = origin_vehicle.to_dict()
+            for key in ["x", "y", "vx", "vy"]:
+                d[key] -= origin_dict[key]
+        return d
+
+    @property
+    def direction(self) -> Vec2D:
+        return np.array([np.cos(self.heading), np.sin(self.heading)])
+
+    @property
+    def velocity(self) -> Vec2D:
+        return self.speed * self.direction
+
+    def polygon(self) -> Polygon:
+        points: Float[np.ndarray, "2,*"] = np.array(
+            [
+                [-self.LENGTH / 2, -self.WIDTH / 2],
+                [-self.LENGTH / 2, +self.WIDTH / 2],
+                [+self.LENGTH / 2, +self.WIDTH / 2],
+                [+self.LENGTH / 2, -self.WIDTH / 2],
+            ]
+        ).T
+        c, s = np.cos(self.heading), np.sin(self.heading)
+        rotation: Float[np.ndarray, "2,2"] = np.array([[c, -s], [s, c]])
+        points: Polygon = (rotation @ points).T + np.tile(self.position, (4, 1))
+        return np.vstack([points, points[0:1]])
+
+    def lane_distance_to(self, other: RoadObject, lane: AbstractLane | None = None) -> float:
+        """
+        Compute the signed distance to another object along a lane.
+
+        :param other: the other object
+        :param lane: a lane
+        :return: the distance to the other other [m]
+        """
+        if not other:
+            return np.nan
+        if not lane:
+            lane = self.lane
+        return (
+            lane.local_coordinates(other.position)[0]
+            - lane.local_coordinates(self.position)[0]
+        )
+
+    @property
+    def on_road(self) -> bool:
+        """Is the object on its current lane, or off-road?"""
+        return self.lane.on_lane(self.position)
+
+    def front_distance_to(self, other: RoadObject) -> float:
+        return self.direction.dot(other.position - self.position)
+
+    def __str__(self):
+        return f"{self.__class__.__name__} #{id(self) % 1000}: at {self.position}"
+
+    def __repr__(self):
+        return self.__str__()

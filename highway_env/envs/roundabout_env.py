@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
+from gymnasium.spaces import Discrete
 
 from highway_env import utils
 from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
@@ -11,18 +14,23 @@ from highway_env.vehicle.controller import MDPVehicle
 
 
 class RoundaboutEnvConfig(EnvironmentConfig):
-    incoming_vehicle_destination: int|None
+    incoming_vehicle_destination: int | None
     collision_reward: float
     high_speed_reward: float
     right_lane_reward: float
     lane_change_reward: float
-    duration:int
+    duration: int
     normalize_reward: bool
 
+
 class RoundaboutEnv(AbstractEnv):
+    if TYPE_CHECKING:
+        config: RoundaboutEnvConfig
+        action_space: Discrete
+
     @classmethod
     def default_config(cls) -> RoundaboutEnvConfig:
-        config:RoundaboutEnvConfig = super().default_config() # type: ignore
+        config: RoundaboutEnvConfig = super().default_config()  # type: ignore
         config.update(
             {
                 "observation": {
@@ -92,7 +100,7 @@ class RoundaboutEnv(AbstractEnv):
         net = RoadNetwork()
         radii = [radius, radius + 4]
         n, c, s = LineType.NONE, LineType.CONTINUOUS, LineType.STRIPED
-        line: list[tuple[LineType,LineType]] = [(c, s), (n, c)]
+        line: list[tuple[LineType, LineType]] = [(c, s), (n, c)]
         for lane in [0, 1]:
             net.add_lane(
                 "se",
@@ -341,12 +349,12 @@ class RoundaboutEnv(AbstractEnv):
 
         # Ego-vehicle
         ego_lane = self.road.network.get_lane(("ser", "ses", 0))
-        ego_vehicle:MDPVehicle = self.action_type.vehicle_class(
+        ego_vehicle: MDPVehicle = self.action_type.vehicle_class(
             self.road,
             ego_lane.position(125.0, 0.0),
             speed=8.0,
             heading=ego_lane.heading_at(140.0),
-        ) # type: ignore
+        )  # type: ignore
         try:
             ego_vehicle.plan_route_to("nxs")
         except AttributeError:
@@ -357,12 +365,12 @@ class RoundaboutEnv(AbstractEnv):
         # Incoming vehicle
         destinations = ["exr", "sxr", "nxr"]
         other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
-        vehicle:IDMVehicle = other_vehicles_type.make_on_lane(
+        vehicle: IDMVehicle = other_vehicles_type.make_on_lane(
             self.road,
             ("we", "sx", 1),
             longitudinal=5.0 + self.np_random.normal() * position_deviation,
             speed=16 + self.np_random.normal() * speed_deviation,
-        ) # type: ignore
+        )  # type: ignore
 
         if self.config["incoming_vehicle_destination"] is not None:
             destination = destinations[self.config["incoming_vehicle_destination"]]
@@ -380,7 +388,7 @@ class RoundaboutEnv(AbstractEnv):
                 longitudinal=20.0 * float(i)
                 + self.np_random.normal() * position_deviation,
                 speed=16.0 + self.np_random.normal() * speed_deviation,
-            ) # type: ignore
+            )  # type: ignore
             vehicle.plan_route_to(self.np_random.choice(destinations))
             vehicle.randomize_behavior()
             self.road.vehicles.append(vehicle)
@@ -391,7 +399,7 @@ class RoundaboutEnv(AbstractEnv):
             ("eer", "ees", 0),
             longitudinal=50.0 + self.np_random.normal() * position_deviation,
             speed=16.0 + self.np_random.normal() * speed_deviation,
-        ) # type: ignore
+        )  # type: ignore
         vehicle.plan_route_to(self.np_random.choice(destinations))
         vehicle.randomize_behavior()
         self.road.vehicles.append(vehicle)
@@ -401,6 +409,7 @@ class RoundaboutGenericEnvConfig(RoundaboutEnvConfig):
     roundabout_radius: float
     roundabout_lanes: int
     vehicles_count: int
+
 
 class RoundaboutGenericEnv(RoundaboutEnv):
     """
@@ -413,7 +422,7 @@ class RoundaboutGenericEnv(RoundaboutEnv):
 
     @classmethod
     def default_config(cls) -> RoundaboutGenericEnvConfig:
-        config:RoundaboutGenericEnvConfig = super().default_config() # type: ignore
+        config: RoundaboutGenericEnvConfig = super().default_config()  # type: ignore
         config.update(
             {
                 "roundabout_radius": 20,
@@ -674,12 +683,12 @@ class RoundaboutGenericEnv(RoundaboutEnv):
         ego_lane = self.road.network.get_lane(ego_lane_id)
         ego_longitudinal = ego_lane.length - 2.5  # Placed at end of straight lane
 
-        ego_vehicle:MDPVehicle = self.action_type.vehicle_class(
+        ego_vehicle: MDPVehicle = self.action_type.vehicle_class(
             self.road,
             ego_lane.position(ego_longitudinal, 0.0),
             speed=8.0,
             heading=ego_lane.heading_at(ego_longitudinal),
-        ) # type: ignore
+        )  # type: ignore
         try:
             ego_vehicle.plan_route_to("nxs")
         except AttributeError:
@@ -728,12 +737,12 @@ class RoundaboutGenericEnv(RoundaboutEnv):
                         break
 
                 if is_safe:
-                    vehicle:IDMVehicle = other_vehicles_type.make_on_lane(
+                    vehicle: IDMVehicle = other_vehicles_type.make_on_lane(
                         self.road,
                         lane_id,
                         longitudinal=longitudinal,
                         speed=14.0 + self.np_random.normal() * speed_deviation,
-                    ) # type: ignore
+                    )  # type: ignore
 
                     if self.config.get("incoming_vehicle_destination") is not None:
                         dest_idx = min(

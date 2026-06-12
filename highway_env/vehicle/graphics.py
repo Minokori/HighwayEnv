@@ -6,13 +6,14 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pygame
 
-from highway_env.typing import Color, Vector
+from highway_env.typing import Color, Position, Vector
 from highway_env.vehicle.behavior import IDMVehicle, LinearVehicle
 from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.dynamics import BicycleVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
 
+__all__ = ["VehicleGraphics"]
 if TYPE_CHECKING:
     from highway_env.road.graphics import WorldSurface
 
@@ -31,7 +32,7 @@ class VehicleGraphics:
     def display(
         cls,
         vehicle: Vehicle,
-        surface: WorldSurface,
+        surface: "WorldSurface",
         transparent: bool = False,
         offscreen: bool = False,
         label: bool = False,
@@ -147,7 +148,7 @@ class VehicleGraphics:
     def blit_rotate(
         surf: pygame.SurfaceType,
         image: pygame.SurfaceType,
-        pos: Vector,
+        pos: Position,
         angle: float,
         origin_pos: Vector | None = None,
         show_rect: bool = False,
@@ -188,7 +189,7 @@ class VehicleGraphics:
 
     @classmethod
     def display_trajectory(
-        cls, states: list[Vehicle], surface: WorldSurface, offscreen: bool = False
+        cls, states: list[Vehicle], surface: "WorldSurface", offscreen: bool = False
     ) -> None:
         """
         Display the whole trajectory of a vehicle on a pygame surface.
@@ -204,7 +205,7 @@ class VehicleGraphics:
     def display_history(
         cls,
         vehicle: Vehicle,
-        surface: WorldSurface,
+        surface: "WorldSurface",
         frequency: float = 3,
         duration: float = 2,
         simulation: int = 15,
@@ -260,6 +261,3 @@ class VehicleGraphics:
             min(int(color[1] / ratio), 255),
             min(int(color[2] / ratio), 255),
         ) + color[3:]
-
-
-__all__ = ["VehicleGraphics"]

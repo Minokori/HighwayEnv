@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-import numpy as np
+from typing import TYPE_CHECKING
 
+import numpy as np
+from gymnasium.spaces import Discrete
 from highway_env import utils
 from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
 from highway_env.envs.common.action import Action
@@ -12,6 +14,7 @@ from highway_env.vehicle.kinematics import Vehicle
 
 
 Observation = np.ndarray
+
 
 class HighwayEnvConfig(EnvironmentConfig):
     lanes_count: int
@@ -29,6 +32,7 @@ class HighwayEnvConfig(EnvironmentConfig):
     normalize_reward: bool
     offroad_terminal: bool
 
+
 class HighwayEnv(AbstractEnv):
     """
     A highway driving environment.
@@ -36,10 +40,13 @@ class HighwayEnv(AbstractEnv):
     The vehicle is driving on a straight highway with several lanes, and is rewarded for reaching a high speed,
     staying on the rightmost lanes and avoiding collisions.
     """
+    if TYPE_CHECKING:
+        config: HighwayEnvConfig
+        action_space: Discrete
 
     @classmethod
     def default_config(cls) -> HighwayEnvConfig:
-        config:HighwayEnvConfig = super().default_config()  # type: ignore
+        config: HighwayEnvConfig = super().default_config()  # type: ignore
         config.update(
             {
                 "observation": {"type": "Kinematics"},
@@ -76,7 +83,7 @@ class HighwayEnv(AbstractEnv):
             network=RoadNetwork.straight_road_network(
                 self.config["lanes_count"], speed_limit=30
             ),
-            np_random=self.np_random, # type: ignore
+            np_random=self.np_random,  # type: ignore
             record_history=self.config["show_trajectories"],
         )
 
@@ -132,11 +139,11 @@ class HighwayEnv(AbstractEnv):
 
     def _rewards(self, action: Action) -> dict[str, float]:
         neighbours = self.road.network.all_side_lanes(self.vehicle.lane_index)
-        lane:int = (
+        lane: int = (
             self.vehicle.target_lane_index[2]
             if isinstance(self.vehicle, ControlledVehicle)
             else self.vehicle.lane_index[2]
-        ) # type: ignore
+        )  # type: ignore
         # Use forward speed rather than speed, see https://github.com/eleurent/highway-env/issues/268
         forward_speed = self.vehicle.speed * np.cos(self.vehicle.heading)
         scaled_speed = utils.lmap(

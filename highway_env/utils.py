@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from numpy.typing import NDArray
 
-from highway_env.typing import *
+from highway_env.typing import Interval, Matrix, Polygon, Vec2D, Vector
 
 
 def do_every(duration: float, timer: float) -> bool:

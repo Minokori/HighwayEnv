@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import copy
-from typing import TYPE_CHECKING, Callable, List, Tuple
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -17,17 +18,16 @@ from highway_env.interval import (
     polytope,
     vector_interval_section,
 )
-from highway_env.road.road import LaneIndex, Road, Route
-from highway_env.utils import Vector
+from highway_env.road.road import Road
+from highway_env.typing import Interval, NewLaneIndex, Polytope, Route, Vector
 from highway_env.vehicle.behavior import LinearVehicle
 from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
 
 if TYPE_CHECKING:
-    from highway_env.object.a import RoadObject
-
-Polytope = Tuple[np.ndarray, List[np.ndarray]]
+    from highway_env.object import RoadObject
+#
 
 
 class IntervalVehicle(LinearVehicle):
@@ -45,14 +45,14 @@ class IntervalVehicle(LinearVehicle):
         position: Vector,
         heading: float = 0,
         speed: float = 0,
-        target_lane_index: LaneIndex = None,
-        target_speed: float = None,
-        route: Route = None,
+        target_lane_index: NewLaneIndex | None = None,
+        target_speed: float | None = None,
+        route: Route | None = None,
         enable_lane_change: bool = True,
-        timer: float = None,
-        theta_a_i: list[list[float]] = None,
-        theta_b_i: list[list[float]] = None,
-        data: dict = None,
+        timer: float | None = None,
+        theta_a_i: list[list[float]] | None = None,
+        theta_b_i: list[list[float]] | None = None,
+        data: dict | None = None,
     ) -> None:
         """
         :param theta_a_i: The interval of possible acceleration parameters
@@ -69,21 +69,22 @@ class IntervalVehicle(LinearVehicle):
             enable_lane_change,
             timer,
         )
-        self.theta_a_i = (
-            theta_a_i if theta_a_i is not None else LinearVehicle.ACCELERATION_RANGE
+        self.theta_a_i: Interval = (
+            np.array(theta_a_i) if theta_a_i is not None else LinearVehicle.ACCELERATION_RANGE
         )
-        self.theta_b_i = (
-            theta_b_i if theta_b_i is not None else LinearVehicle.STEERING_RANGE
+        self.theta_b_i: Interval = (
+            np.array(theta_b_i) if theta_b_i is not None else LinearVehicle.STEERING_RANGE
         )
-        self.data = data
+        self.data: dict[str, dict[str, list[np.ndarray]]] = data  # type: ignore
         self.interval = VehicleInterval(self)
         self.trajectory = []
         self.interval_trajectory = []
-        self.longitudinal_lpv, self.lateral_lpv = None, None
+        self.longitudinal_lpv: LPV = None  # type:ignore
+        self.lateral_lpv: LPV = None  # type:ignore
         self.previous_target_lane_index = self.target_lane_index
 
     @classmethod
-    def create_from(cls, vehicle: LinearVehicle) -> IntervalVehicle:
+    def create_from(cls, vehicle: Vehicle) -> IntervalVehicle:
         v = cls(
             vehicle.road,
             vehicle.position,
@@ -136,7 +137,7 @@ class IntervalVehicle(LinearVehicle):
             lane_psi = self.lane.heading_at(
                 self.lane.local_coordinates(self.position)[0]
             )
-            lane_direction = [np.cos(lane_psi), np.sin(lane_psi)]
+            lane_direction = np.array([np.cos(lane_psi), np.sin(lane_psi)])
             diff_i = intervals_diff(front_interval.position, position_i)
             d_i = vector_interval_section(diff_i, lane_direction)
 
@@ -144,7 +145,7 @@ class IntervalVehicle(LinearVehicle):
             phi_a_i[:, 2] = interval_negative_part(intervals_diff(d_i, d_safe_i))
 
         # Steering features
-        phi_b_i = None
+        phi_b_i: Interval = None  # type: ignore
         lanes = self.get_followed_lanes()
         for lane_index in lanes:
             lane = self.road.network.get_lane(lane_index)
@@ -155,7 +156,7 @@ class IntervalVehicle(LinearVehicle):
             _, lateral_i = interval_absolute_to_local(position_i, lane)
             lateral_i = -np.flip(lateral_i)
             i_v_i = 1 / np.flip(v_i, 0)
-            phi_b_i_lane = np.transpose(
+            phi_b_i_lane: Interval = np.transpose(
                 np.array([[0, 0], intervals_product(lateral_i, i_v_i)])
             )
             # Union of candidate feature intervals
@@ -181,7 +182,7 @@ class IntervalVehicle(LinearVehicle):
         dv_i = np.clip(dv_i, -self.ACC_MAX, self.ACC_MAX)
         keep_stability = True
         if keep_stability:
-            delta_psi = list(map(utils.wrap_to_pi, psi_i - lane_psi))
+            delta_psi = np.array(list(map(utils.wrap_to_pi, psi_i - lane_psi)))
             d_psi_i = integrator_interval(delta_psi, self.theta_b_i[:, 0])
         else:
             d_psi_i = intervals_product(
@@ -190,14 +191,14 @@ class IntervalVehicle(LinearVehicle):
         d_psi_i += b_i
 
         # Position interval
-        cos_i = [
+        cos_i = np.array([
             -1 if psi_i[0] <= np.pi <= psi_i[1] else min(map(np.cos, psi_i)),
             1 if psi_i[0] <= 0 <= psi_i[1] else max(map(np.cos, psi_i)),
-        ]
-        sin_i = [
+        ])
+        sin_i = np.array([
             -1 if psi_i[0] <= -np.pi / 2 <= psi_i[1] else min(map(np.sin, psi_i)),
             1 if psi_i[0] <= np.pi / 2 <= psi_i[1] else max(map(np.sin, psi_i)),
-        ]
+        ])
         dx_i = intervals_product(v_i, cos_i)
         dy_i = intervals_product(v_i, sin_i)
 
@@ -295,31 +296,31 @@ class IntervalVehicle(LinearVehicle):
                 f_vel = front_interval.speed[0]
             else:
                 f_pos, f_vel = 0, 0
-            x0 = [longi_i[0], f_pos, v_i[0], f_vel]
-            center = [
+            x0 = np.array([longi_i[0], f_pos, v_i[0], f_vel])
+            center = np.array([
                 -self.DISTANCE_WANTED - self.target_speed * self.TIME_WANTED,
                 0,
                 self.target_speed,
                 self.target_speed,
-            ]
+            ])
             noise = 1
             b = np.eye(4)
             d = np.array([[1], [0], [0], [0]])
             omega_i = np.array([[-1], [1]]) * noise
-            u = [[self.target_speed], [self.target_speed], [0], [0]]
+            u = np.array([[self.target_speed], [self.target_speed], [0], [0]])
             a0, da = self.longitudinal_matrix_polytope()
             self.longitudinal_lpv = LPV(x0, a0, da, b, d, omega_i, u, center=center)
 
             # Lateral predictor
             if not self.lateral_lpv:
                 # LPV specification
-                x0 = [lat_i[0], psi_i[0]]
-                center = [0, 0]
+                x0 = np.array([lat_i[0], psi_i[0]])
+                center = np.array([0, 0])
                 noise = 0.5
                 b = np.identity(2)
                 d = np.array([[1], [0]])
                 omega_i = np.array([[-1], [1]]) * noise
-                u = [[0], [0]]
+                u = np.array([[0], [0]])
                 a0, da = self.lateral_matrix_polytope()
                 self.lateral_lpv = LPV(x0, a0, da, b, d, omega_i, u, center=center)
 
@@ -335,13 +336,15 @@ class IntervalVehicle(LinearVehicle):
 
     @staticmethod
     def parameter_box_to_polytope(
-        parameter_box: np.ndarray, structure: Callable
+        parameter_box: np.ndarray, structure: Callable[[], Polytope]
     ) -> Polytope:
         a, phi = structure()
-        a_theta = lambda params: a + np.tensordot(phi, params, axes=[0, 0])
+
+        def a_theta(params):
+            return a + np.tensordot(phi, params, axes=(0, 0))
         return polytope(a_theta, parameter_box)
 
-    def get_front_interval(self) -> VehicleInterval:
+    def get_front_interval(self) -> VehicleInterval | None:
         # TODO: For now, we assume the front vehicle follows the models' front vehicle
         front_vehicle, _ = self.road.neighbour_vehicles(self)
         if front_vehicle:
@@ -358,7 +361,7 @@ class IntervalVehicle(LinearVehicle):
 
     def get_followed_lanes(
         self, lane_change_model: str = "model", squeeze: bool = True
-    ) -> list[LaneIndex]:
+    ) -> list[NewLaneIndex]:
         """
         Get the list of lanes that could be followed by this vehicle.
 
@@ -381,11 +384,11 @@ class IntervalVehicle(LinearVehicle):
             if _id < len(
                 self.road.network.graph[_from][_to]
             ) - 1 and self.road.network.get_lane(
-                (_from, _to, _id + 1)
+                NewLaneIndex(_from, _to, _id + 1)
             ).is_reachable_from(
                 self.position
             ):
-                lanes += [(_from, _to, _id + 1)]
+                lanes += [NewLaneIndex(_from, _to, _id + 1)]
             elif not squeeze:
                 lanes += [self.target_lane_index]  # Right lane is also current lane
         return lanes

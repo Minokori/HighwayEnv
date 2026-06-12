@@ -6,6 +6,9 @@ from scipy import interpolate
 from highway_env.typing import Position, Vec2D, Vector
 
 
+__all__ = ["LinearSpline2D", "CurvePose"]
+
+
 class LinearSpline2D:
     """
     Piece-wise linear curve fitted to a list of points.

@@ -5,7 +5,6 @@ from collections.abc import Callable
 import matplotlib.pyplot as plt
 import numpy as np
 from jaxtyping import Float
-from numpy.typing import NDArray
 
 from highway_env.road.road import Road
 from highway_env.typing import Vector
@@ -310,7 +309,7 @@ def simulate(dt: float = 0.1) -> None:
     plot(time, xx, uu)
 
 
-def plot(time: NDArray[np.floating], xx: NDArray[np.float32], uu: NDArray[np.float32]) -> None:
+def plot(time: np.ndarray, xx: np.ndarray, uu: np.ndarray) -> None:
     pos_x, pos_y = xx[:, 0, 0], xx[:, 1, 0]
     psi_x, psi_y = np.cos(xx[:, 2, 0]), np.sin(xx[:, 2, 0])
     dir_x, dir_y = np.cos(xx[:, 2, 0] + uu[:, 0, 0]), np.sin(xx[:, 2, 0] + uu[:, 0, 0])

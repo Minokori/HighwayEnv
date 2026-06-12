@@ -4,10 +4,13 @@ from typing import Self
 import numpy as np
 from torch import TYPE_CHECKING
 
-from highway_env import utils
-from highway_env.road.road import Road, Route
-from highway_env.utils import ActionDict, NewLaneIndex, Position, Vector
+from highway_env.road.road import Road
+from highway_env.typing import ActionDict, NewLaneIndex, Position, Route, Vector
+from highway_env.utils import not_zero, wrap_to_pi
 from highway_env.vehicle.kinematics import Vehicle
+
+
+__all__ = ["ControlledVehicle", "MDPVehicle"]
 
 
 class ControlledVehicle(Vehicle):
@@ -169,19 +172,19 @@ class ControlledVehicle(Vehicle):
         lateral_speed_command = -self.KP_LATERAL * lane_coords[1]
         # Lateral speed to heading
         heading_command = np.arcsin(
-            np.clip(lateral_speed_command / utils.not_zero(self.speed), -1, 1)
+            np.clip(lateral_speed_command / not_zero(self.speed), -1, 1)
         )
         heading_ref = lane_future_heading + np.clip(
             heading_command, -np.pi / 4, np.pi / 4
         )
         # Heading control
-        heading_rate_command = self.KP_HEADING * utils.wrap_to_pi(
+        heading_rate_command = self.KP_HEADING * wrap_to_pi(
             heading_ref - self.heading
         )
         # Heading rate to steering angle
         slip_angle = np.arcsin(
             np.clip(
-                self.LENGTH / 2 / utils.not_zero(self.speed) * heading_rate_command,
+                self.LENGTH / 2 / not_zero(self.speed) * heading_rate_command,
                 -1,
                 1,
             )

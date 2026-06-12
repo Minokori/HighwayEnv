@@ -10,14 +10,14 @@ from jaxtyping import Float
 from numpy import ndarray
 
 
-__all__ = ["Position", "Polygon", "Vec2D", "Color", "NewLaneIndex", "Vector", "Matrix", "Interval", "ActionDict", "LineType"]
+__all__ = ["Position", "Polygon", "Vec2D", "Color", "NewLaneIndex", "Vector", "Matrix", "Interval", "ActionDict", "LineType", "Route"]
 
 
 Position = Float[ndarray, "2"]
 """A class representing a position in 2D space,
 as a numpy array of shape (2,) and dtype float."""
 
-Polygon = Float[ndarray, "*, 2"]
+Polygon = Float[ndarray, "* 2"]
 """A class representing a polygon in 2D space,as a numpy array of shape (n, 2) and dtype float."""
 
 Vec2D = Float[ndarray, "2"]
@@ -27,6 +27,7 @@ impact, velocity, heading, etc. can be represented as Vec2D."""
 
 Color = tuple[int, int, int] | tuple[int, int, int, int]
 """A class representing a color, as a tuple of 3 or 4 integers in [0, 255]."""
+Polytope = tuple[Float[ndarray, "* *"], Float[ndarray, "* * *"]]
 
 
 class NewLaneIndex(tuple[str, str, int]):
@@ -49,14 +50,25 @@ class NewLaneIndex(tuple[str, str, int]):
 
 
 NewLaneIndex.EMPTY = NewLaneIndex("", "", None)
-
-
+Route = list[NewLaneIndex]
 Vector = Float[ndarray, "*"]
 """An 1D ndarray, shape (n,)"""
 Matrix = Float[ndarray, "*, *"]
 """An 2D ndarray, shape (m, n)"""
-Interval = Float[ndarray, "2"] | Float[ndarray, "2, *"] | Float[ndarray, "2, *, *"]
-"""An 1D or 2D or 3D ndarray, shape (2,) or (2, n) or (2, m, n)"""
+
+Grid = Float[ndarray, "speed lane time"]
+"""A 3D ndarray, shape (num_speed, num_lane, num_time) representing a grid of time-to-collision values for different speeds, lanes and time horizons."""
+
+Interval1D = Float[ndarray, "2"]
+"""An 1D ndarray, shape (2,) representing an interval [min, max]"""
+
+Interval2D = Float[ndarray, "2 i"]
+"""An 2D ndarray, shape (2, n) representing n intervals [min_i, max_i]"""
+
+Interval3D = Float[ndarray, "2 i j"]
+"""An 3D ndarray, shape (2, m, n) representing m x n intervals [min_ij, max_ij]"""
+
+Interval = Interval1D | Interval2D | Interval3D
 
 
 class ActionDict(TypedDict):

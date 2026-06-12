@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+from gymnasium.spaces import Discrete
 import numpy as np
 
 from highway_env import utils
 from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
+from highway_env.object import Obstacle
 from highway_env.road.lane import LineType, SineLane, StraightLane
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.vehicle.controller import ControlledVehicle
-from highway_env.object.a import Obstacle
 
 
 class MergeEnvConfig(EnvironmentConfig):
@@ -18,6 +20,7 @@ class MergeEnvConfig(EnvironmentConfig):
     merging_speed_reward: float
     lane_change_reward: float
 
+
 class MergeEnv(AbstractEnv):
     """
     A highway merge negotiation environment.
@@ -26,10 +29,13 @@ class MergeEnv(AbstractEnv):
     It is rewarded for maintaining a high speed and avoiding collisions, but also making room for merging
     vehicles.
     """
+    if TYPE_CHECKING:
+        config: MergeEnvConfig
+        action_space: Discrete
 
     @classmethod
     def default_config(cls) -> MergeEnvConfig:
-        cfg:MergeEnvConfig = super().default_config()  #type: ignore
+        cfg: MergeEnvConfig = super().default_config()  # type: ignore
         cfg.update(
             {
                 "collision_reward": -1,
@@ -101,7 +107,7 @@ class MergeEnv(AbstractEnv):
         net = RoadNetwork()
 
         # Highway lanes
-        ends:list[float] = [150, 80, 80, 150]  # Before, converging, merge, after
+        ends: list[float] = [150, 80, 80, 150]  # Before, converging, merge, after
         c, s, n = LineType.CONTINUOUS_LINE, LineType.STRIPED, LineType.NONE
         y = [0, StraightLane.DEFAULT_WIDTH]
         line_type: list[tuple[LineType, LineType]] = [(c, s), (n, c)]
@@ -154,7 +160,7 @@ class MergeEnv(AbstractEnv):
         net.add_lane("b", "c", lbc)
         road = Road(
             network=net,
-            np_random=self.np_random, # type: ignore
+            np_random=self.np_random,  # type: ignore
             record_history=self.config["show_trajectories"],
         )
         road.objects.append(Obstacle(road, *lbc.position(ends[2], 0)))
@@ -167,9 +173,9 @@ class MergeEnv(AbstractEnv):
         :return: the ego-vehicle
         """
         road = self.road
-        ego_vehicle:ControlledVehicle = self.action_type.vehicle_class(
+        ego_vehicle: ControlledVehicle = self.action_type.vehicle_class(
             road, road.network.get_lane(("a", "b", 1)).position(30.0, 0.0), speed=30.0
-        ) # type: ignore
+        )  # type: ignore
         road.vehicles.append(ego_vehicle)
 
         other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
