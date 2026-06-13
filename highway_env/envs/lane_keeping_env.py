@@ -9,15 +9,17 @@ from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
 from highway_env.interval import LPV
 from highway_env.road.lane import LineType, SineLane, StraightLane
 from highway_env.road.road import Road, RoadNetwork
+from highway_env.typing import NewLaneIndex
 from highway_env.vehicle.dynamics import BicycleVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
 
 class LaneKeepingEnvConfig(EnvironmentConfig):
-    state_noise:float
-    derivative_noise:float
+    state_noise: float
+    derivative_noise: float
 
-class LaneKeepingEnv(AbstractEnv):
+
+class LaneKeepingEnv(AbstractEnv[LaneKeepingEnvConfig]):
     """A lane keeping control task."""
 
     if TYPE_CHECKING:
@@ -26,18 +28,18 @@ class LaneKeepingEnv(AbstractEnv):
         @vehicle.setter
         def vehicle(self, value: Vehicle): ...
 
-    def __init__(self, config: LaneKeepingEnvConfig|None = None) -> None:
+    def __init__(self, config: LaneKeepingEnvConfig | None = None) -> None:
         super().__init__(config)
         # we assume that the lane is not None in runtime
-        self.lane:StraightLane | SineLane = None  # type: ignore
+        self.lane: StraightLane | SineLane = StraightLane.EMPTY
         self.lanes = []
         self.trajectory = []
         self.interval_trajectory = []
-        self.lpv:LPV|None = None
+        self.lpv: LPV | None = None
 
     @classmethod
-    def default_config(cls) -> LaneKeepingEnvConfig:
-        config:LaneKeepingEnvConfig = super().default_config()  # type: ignore
+    def default_config(cls):
+        config: LaneKeepingEnvConfig = super().default_config()
         config.update(
             {
                 "observation": {
@@ -130,7 +132,7 @@ class LaneKeepingEnv(AbstractEnv):
         )
         road = Road(
             network=net,
-            np_random=self.np_random, # type: ignore
+            np_random=self.np_random,  # type: ignore
             record_history=self.config["show_trajectories"],
         )
         self.road = road
@@ -139,8 +141,8 @@ class LaneKeepingEnv(AbstractEnv):
         road = self.road
         ego_vehicle: BicycleVehicle = self.action_type.vehicle_class(
             road,
-            road.network.get_lane(("c", "d", 0)).position(50, -4),
-            heading=road.network.get_lane(("c", "d", 0)).heading_at(0),
+            road.network.get_lane(NewLaneIndex("c", "d", 0)).position(50, -4),
+            heading=road.network.get_lane(NewLaneIndex("c", "d", 0)).heading_at(0),
             speed=8.3,
         )  # type: ignore
         road.vehicles.append(ego_vehicle)
@@ -184,8 +186,8 @@ class LaneKeepingEnv(AbstractEnv):
             state = self.vehicle.state.copy()
             interval = []
             for x_t in self.lpv.change_coordinates(
-                self.lpv.x_i_t, back=True, interval=True # type: ignore
-            ): # type: ignore
+                self.lpv.x_i_t, back=True, interval=True  # type: ignore
+            ):  # type: ignore
                 # lateral state to full state
                 np.put(state, [1, 2, 4, 5], x_t)
                 # full state to absolute coordinates

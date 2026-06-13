@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from gymnasium.spaces import Discrete
+
+from highway_env.typing import NewLaneIndex
 import numpy as np
+from gymnasium.spaces import Discrete
 
 from highway_env import utils
 from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
 from highway_env.object import Obstacle
 from highway_env.road.lane import LineType, SineLane, StraightLane
 from highway_env.road.road import Road, RoadNetwork
-from highway_env.vehicle.controller import ControlledVehicle
+from highway_env.vehicle.controller import ControlledVehicle, MDPVehicle
 
 
 class MergeEnvConfig(EnvironmentConfig):
@@ -21,7 +23,7 @@ class MergeEnvConfig(EnvironmentConfig):
     lane_change_reward: float
 
 
-class MergeEnv(AbstractEnv):
+class MergeEnv(AbstractEnv[MergeEnvConfig]):
     """
     A highway merge negotiation environment.
 
@@ -30,12 +32,11 @@ class MergeEnv(AbstractEnv):
     vehicles.
     """
     if TYPE_CHECKING:
-        config: MergeEnvConfig
         action_space: Discrete
 
     @classmethod
-    def default_config(cls) -> MergeEnvConfig:
-        cfg: MergeEnvConfig = super().default_config()  # type: ignore
+    def default_config(cls):
+        cfg: MergeEnvConfig = super().default_config()
         cfg.update(
             {
                 "collision_reward": -1,
@@ -72,7 +73,7 @@ class MergeEnv(AbstractEnv):
 
     def _rewards(self, action: int) -> dict[str, float]:
         scaled_speed = utils.lmap(
-            self.vehicle.speed, self.config["reward_speed_range"], np.array([0, 1])
+            self.vehicle.speed, np.array(self.config["reward_speed_range"]), np.array([0, 1])
         )
         return {
             "collision_reward": self.vehicle.crashed,
@@ -173,21 +174,21 @@ class MergeEnv(AbstractEnv):
         :return: the ego-vehicle
         """
         road = self.road
-        ego_vehicle: ControlledVehicle = self.action_type.vehicle_class(
-            road, road.network.get_lane(("a", "b", 1)).position(30.0, 0.0), speed=30.0
+        ego_vehicle: MDPVehicle = self.action_type.vehicle_class(
+            road, road.network.get_lane(NewLaneIndex("a", "b", 1)).position(30.0, 0.0), speed=30.0
         )  # type: ignore
         road.vehicles.append(ego_vehicle)
 
         other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
 
         for position, speed in [(90.0, 29.0), (70.0, 31.0), (5.0, 31.5)]:
-            lane = road.network.get_lane(("a", "b", int(self.np_random.integers(2))))  # type: ignore
+            lane = road.network.get_lane(NewLaneIndex("a", "b", int(self.np_random.integers(2))))
             position = lane.position(position + self.np_random.uniform(-5.0, 5.0), 0.0)
             speed += self.np_random.uniform(-1.0, 1.0)
             road.vehicles.append(other_vehicles_type(road, position, speed=speed))
 
         merging_v = other_vehicles_type(
-            road, road.network.get_lane(("j", "k", 0)).position(110.0, 0.0), speed=20.0
+            road, road.network.get_lane(NewLaneIndex("j", "k", 0)).position(110.0, 0.0), speed=20.0
         )
         merging_v.target_speed = 30.0
         road.vehicles.append(merging_v)

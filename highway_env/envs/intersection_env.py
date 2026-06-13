@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from highway_env.vehicle.controller import ControlledVehicle, MDPVehicle
 import numpy as np
 
 from highway_env import utils
@@ -12,29 +11,32 @@ from highway_env.envs.common.abstract import (
 from highway_env.road.lane import AbstractLane, CircularLane, LineType, StraightLane
 from highway_env.road.regulation import RegulatedRoad
 from highway_env.road.road import RoadNetwork
+from highway_env.typing import NewLaneIndex
+from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
 
 class IntersectionEnvConfig(EnvironmentConfig):
-    duration:float
-    destination:str
-    controlled_vehicles:int
-    initial_vehicle_count:int
-    spawn_probability:float
-    collision_reward:float
-    high_speed_reward:float
-    arrived_reward:float
-    reward_speed_range:list[float]
-    normalize_reward:bool
-    offroad_terminal:bool
+    duration: float
+    destination: str
+    controlled_vehicles: int
+    initial_vehicle_count: int
+    spawn_probability: float
+    collision_reward: float
+    high_speed_reward: float
+    arrived_reward: float
+    reward_speed_range: list[float]
+    normalize_reward: bool
+    offroad_terminal: bool
 
-class IntersectionEnv(AbstractEnv):
+
+class IntersectionEnv(AbstractEnv[IntersectionEnvConfig]):
     ACTIONS: dict[int, str] = {0: "SLOWER", 1: "IDLE", 2: "FASTER"}
     ACTIONS_INDEXES = {v: k for k, v in ACTIONS.items()}
 
     @classmethod
-    def default_config(cls) -> IntersectionEnvConfig:
-        config:IntersectionEnvConfig = super().default_config()  #type: ignore
+    def default_config(cls):
+        config: IntersectionEnvConfig = super().default_config()  # type: ignore
         config.update(
             {
                 "observation": {
@@ -112,7 +114,7 @@ class IntersectionEnv(AbstractEnv):
     def _agent_rewards(self, action: int, vehicle: Vehicle) -> dict[str, float]:
         """Per-agent per-objective reward signal."""
         scaled_speed = utils.lmap(
-            vehicle.speed, self.config["reward_speed_range"], np.array([0, 1])
+            vehicle.speed, np.array(self.config["reward_speed_range"]), np.array([0, 1])
         )
         return {
             "collision_reward": vehicle.crashed,
@@ -261,7 +263,7 @@ class IntersectionEnv(AbstractEnv):
 
         road = RegulatedRoad(
             network=net,
-            np_random=self.np_random, # type: ignore
+            np_random=self.np_random,  # type: ignore
             record_history=self.config["show_trajectories"],
         )
         self.road = road
@@ -304,17 +306,17 @@ class IntersectionEnv(AbstractEnv):
         self.controlled_vehicles = []
         for ego_id in range(0, self.config["controlled_vehicles"]):
             ego_lane = self.road.network.get_lane(
-                (f"o{ego_id % 4}", f"ir{ego_id % 4}", 0)
+                NewLaneIndex(f"o{ego_id % 4}", f"ir{ego_id % 4}", 0)
             )
             destination = self.config["destination"] or "o" + str(
                 self.np_random.integers(1, 4)
             )
-            ego_vehicle:MDPVehicle = self.action_type.vehicle_class(
+            ego_vehicle: MDPVehicle = self.action_type.vehicle_class(
                 self.road,
                 ego_lane.position(60.0 + 5.0 * self.np_random.normal(1.0), 0.0),
                 speed=ego_lane.speed_limit,
                 heading=ego_lane.heading_at(60.0),
-            ) # type: ignore
+            )  # type: ignore
             try:
                 ego_vehicle.plan_route_to(destination)
                 ego_vehicle.speed_index = ego_vehicle.speed_to_index(
@@ -389,7 +391,7 @@ class IntersectionEnv(AbstractEnv):
 
 class MultiAgentIntersectionEnv(IntersectionEnv):
     @classmethod
-    def default_config(cls) -> IntersectionEnvConfig:
+    def default_config(cls):
         config = super().default_config()
         config.update(
             {
@@ -413,7 +415,7 @@ class MultiAgentIntersectionEnv(IntersectionEnv):
 
 class ContinuousIntersectionEnv(IntersectionEnv):
     @classmethod
-    def default_config(cls) -> IntersectionEnvConfig:
+    def default_config(cls):
         config = super().default_config()
         config.update(
             {

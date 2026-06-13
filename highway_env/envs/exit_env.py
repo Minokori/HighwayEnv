@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from highway_env.typing import NewLaneIndex
 import numpy as np
 
 from highway_env import utils
@@ -15,11 +16,10 @@ from highway_env.vehicle.kinematics import Vehicle
 class ExitEnvConfig(HighwayEnvConfig):
     goal_reward:float
 
-class ExitEnv(HighwayEnv):
+class ExitEnv(HighwayEnv[ExitEnvConfig]):
     """ """
-
     @classmethod
-    def default_config(cls) -> ExitEnvConfig:
+    def default_config(cls):
         config: ExitEnvConfig = super().default_config() # type: ignore
         config.update(
             {
@@ -81,7 +81,7 @@ class ExitEnv(HighwayEnv):
         for _from in net.graph:
             for _to in net.graph[_from]:
                 for _id in range(len(net.graph[_from][_to])):
-                    net.get_lane((_from, _to, _id)).speed_limit = 26 - 3.4 * _id
+                    net.get_lane(NewLaneIndex(_from, _to, _id)).speed_limit = 26 - 3.4 * _id
         exit_position = np.array(
             [
                 exit_position + exit_length,
@@ -129,7 +129,7 @@ class ExitEnv(HighwayEnv):
             lane_id = self.road.np_random.choice(
                 lanes, size=1, p=lanes / lanes.sum()
             ).astype(int)[0]
-            lane = self.road.network.get_lane(("0", "1", lane_id))
+            lane = self.road.network.get_lane(NewLaneIndex("0", "1", lane_id))
             vehicle = vehicles_type.create_random(
                 self.road,
                 lane_from="0",
@@ -154,7 +154,8 @@ class ExitEnv(HighwayEnv):
         if self.config["normalize_reward"]:
             reward = utils.lmap(
                 reward,
-                np.array([self.config["collision_reward"], self.config["goal_reward"]]),
+                np.array([self.config["collision_reward"],
+                self.config["goal_reward"]]),
                 np.array([0, 1]),
             )
             reward = np.clip(reward, 0, 1)
@@ -167,7 +168,7 @@ class ExitEnv(HighwayEnv):
             else self.vehicle.lane_index
         )
         scaled_speed = utils.lmap(
-            self.vehicle.speed, self.config["reward_speed_range"], np.array([0, 1])
+            self.vehicle.speed, np.array(self.config["reward_speed_range"]), np.array([0, 1])
         )
         return {
             "collision_reward": self.vehicle.crashed,

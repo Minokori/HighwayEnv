@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 import numpy as np
 from gymnasium.spaces import Discrete
@@ -9,6 +9,7 @@ from highway_env import utils
 from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
 from highway_env.road.lane import CircularLane, LineType, SineLane, StraightLane
 from highway_env.road.road import Road, RoadNetwork
+from highway_env.typing import NewLaneIndex
 from highway_env.vehicle.behavior import IDMVehicle
 from highway_env.vehicle.controller import MDPVehicle
 
@@ -23,14 +24,17 @@ class RoundaboutEnvConfig(EnvironmentConfig):
     normalize_reward: bool
 
 
-class RoundaboutEnv(AbstractEnv):
+RoundaboutConfig = TypeVar("RoundaboutConfig", bound=RoundaboutEnvConfig)
+
+
+class RoundaboutEnv(AbstractEnv[RoundaboutEnvConfig], Generic[RoundaboutConfig]):
+    config: RoundaboutConfig
     if TYPE_CHECKING:
-        config: RoundaboutEnvConfig
         action_space: Discrete
 
     @classmethod
-    def default_config(cls) -> RoundaboutEnvConfig:
-        config: RoundaboutEnvConfig = super().default_config()  # type: ignore
+    def default_config(cls) -> RoundaboutConfig:
+        config = super().default_config()
         config.update(
             {
                 "observation": {
@@ -56,7 +60,7 @@ class RoundaboutEnv(AbstractEnv):
                 "normalize_reward": True,
             }
         )
-        return config
+        return cast(RoundaboutConfig, config)
 
     def _reward(self, action: int) -> float:
         rewards = self._rewards(action)
@@ -348,7 +352,7 @@ class RoundaboutEnv(AbstractEnv):
         speed_deviation = 2.0
 
         # Ego-vehicle
-        ego_lane = self.road.network.get_lane(("ser", "ses", 0))
+        ego_lane = self.road.network.get_lane(NewLaneIndex("ser", "ses", 0))
         ego_vehicle: MDPVehicle = self.action_type.vehicle_class(
             self.road,
             ego_lane.position(125.0, 0.0),
@@ -364,13 +368,13 @@ class RoundaboutEnv(AbstractEnv):
 
         # Incoming vehicle
         destinations = ["exr", "sxr", "nxr"]
-        other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
-        vehicle: IDMVehicle = other_vehicles_type.make_on_lane(
+        other_vehicles_type: type[IDMVehicle] = utils.class_from_path(self.config["other_vehicles_type"])  # type: ignore
+        vehicle = other_vehicles_type.make_on_lane(
             self.road,
-            ("we", "sx", 1),
+            NewLaneIndex("we", "sx", 1),
             longitudinal=5.0 + self.np_random.normal() * position_deviation,
             speed=16 + self.np_random.normal() * speed_deviation,
-        )  # type: ignore
+        )
 
         if self.config["incoming_vehicle_destination"] is not None:
             destination = destinations[self.config["incoming_vehicle_destination"]]
@@ -384,7 +388,7 @@ class RoundaboutEnv(AbstractEnv):
         for i in list(range(1, 2)) + list(range(-1, 0)):
             vehicle = other_vehicles_type.make_on_lane(
                 self.road,
-                ("we", "sx", 0),
+                NewLaneIndex("we", "sx", 0),
                 longitudinal=20.0 * float(i)
                 + self.np_random.normal() * position_deviation,
                 speed=16.0 + self.np_random.normal() * speed_deviation,
@@ -396,7 +400,7 @@ class RoundaboutEnv(AbstractEnv):
         # Entering vehicle
         vehicle = other_vehicles_type.make_on_lane(
             self.road,
-            ("eer", "ees", 0),
+            NewLaneIndex("eer", "ees", 0),
             longitudinal=50.0 + self.np_random.normal() * position_deviation,
             speed=16.0 + self.np_random.normal() * speed_deviation,
         )  # type: ignore
@@ -411,7 +415,7 @@ class RoundaboutGenericEnvConfig(RoundaboutEnvConfig):
     vehicles_count: int
 
 
-class RoundaboutGenericEnv(RoundaboutEnv):
+class RoundaboutGenericEnv(RoundaboutEnv[RoundaboutGenericEnvConfig]):
     """
     A generic version of the roundabout environment.
     Additionally supports changing:
@@ -421,8 +425,8 @@ class RoundaboutGenericEnv(RoundaboutEnv):
     """
 
     @classmethod
-    def default_config(cls) -> RoundaboutGenericEnvConfig:
-        config: RoundaboutGenericEnvConfig = super().default_config()  # type: ignore
+    def default_config(cls):
+        config = super().default_config()
         config.update(
             {
                 "roundabout_radius": 20,
@@ -676,10 +680,10 @@ class RoundaboutGenericEnv(RoundaboutEnv):
     def _make_vehicles(self) -> None:
         speed_deviation = 2.0
         vehicle_count = self.config["vehicles_count"]
-        other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
+        other_vehicles_type: type[IDMVehicle] = utils.class_from_path(self.config["other_vehicles_type"])
         destinations = ["exr", "sxr", "nxr", "wxr"]
 
-        ego_lane_id = ("ser", "ses", 0)
+        ego_lane_id = NewLaneIndex("ser", "ses", 0)
         ego_lane = self.road.network.get_lane(ego_lane_id)
         ego_longitudinal = ego_lane.length - 2.5  # Placed at end of straight lane
 
@@ -720,7 +724,7 @@ class RoundaboutGenericEnv(RoundaboutEnv):
                     self.road.network.graph[lane_tuple[0]][lane_tuple[1]]
                 )
                 lane_index = int(self.np_random.integers(0, available_lanes))
-                lane_id = (lane_tuple[0], lane_tuple[1], lane_index)
+                lane_id = NewLaneIndex(lane_tuple[0], lane_tuple[1], lane_index)
 
                 lane = self.road.network.get_lane(lane_id)
                 longitudinal = self.np_random.uniform(
@@ -746,7 +750,7 @@ class RoundaboutGenericEnv(RoundaboutEnv):
 
                     if self.config.get("incoming_vehicle_destination") is not None:
                         dest_idx = min(
-                            self.config["incoming_vehicle_destination"],
+                            self.config["incoming_vehicle_destination"],  # type: ignore
                             len(destinations) - 1,
                         )
                         destination = destinations[dest_idx]

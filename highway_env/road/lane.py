@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABCMeta, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import numpy as np
 
@@ -17,7 +17,7 @@ from highway_env.utils import (
 class AbstractLane:
     """A lane on the road, described by its central curve."""
 
-    EMPTY: "AbstractLane"
+    EMPTY: Self
 
     def __bool__(self):
         return False if self is AbstractLane.EMPTY else True

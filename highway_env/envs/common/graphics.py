@@ -4,17 +4,17 @@ import os
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from highway_env.envs.common.abstract import EnvironmentConfig
-from highway_env.vehicle.controller import ControlledVehicle
 import numpy as np
 import pygame
 
+from highway_env.envs.common.abstract import EnvironmentConfig
 from highway_env.envs.common.action import (
     ActionType,
     ContinuousAction,
     DiscreteMetaAction,
 )
 from highway_env.road.graphics import RoadGraphics, WorldSurface
+from highway_env.vehicle.controller import ControlledVehicle
 from highway_env.vehicle.graphics import VehicleGraphics
 
 
@@ -32,8 +32,8 @@ class EnvViewer:
         self.env: AbstractEnv = env
         self.config: EnvironmentConfig = config or env.config
         self.offscreen = self.config["offscreen_rendering"]
-        self.observer_vehicle:ControlledVehicle = None # type: ignore
-        self.agent_surface:pygame.Surface = None # type: ignore
+        self.observer_vehicle: ControlledVehicle = None  # type: ignore
+        self.agent_surface: pygame.Surface = None  # type: ignore
         self.vehicle_trajectory = None
         self.frame = 0
         self.directory = None
@@ -96,9 +96,9 @@ class EnvViewer:
         :param actions: list of action, following the env's action space specification
         """
         if isinstance(self.env.action_type, DiscreteMetaAction):
-            actions = [self.env.action_type.actions[a] for a in actions] # type: ignore
+            actions = [self.env.action_type.actions[a] for a in actions]  # type: ignore
         elif isinstance(self.env.action_type, ContinuousAction):
-            actions = [self.env.action_type.get_action(a) for a in actions] # type: ignore
+            actions = [self.env.action_type.get_action(a) for a in actions]  # type: ignore
         if len(actions) > 1:
             self.vehicle_trajectory = self.env.vehicle.predict_trajectory(
                 actions,
@@ -209,7 +209,7 @@ class EventHandler:
         if isinstance(action_type, DiscreteMetaAction):
             cls.handle_discrete_action_event(action_type, event)
         elif action_type.__class__ == ContinuousAction:
-            cls.handle_continuous_action_event(action_type, event) # type: ignore
+            cls.handle_continuous_action_event(action_type, event)  # type: ignore
 
     @classmethod
     def handle_discrete_action_event(

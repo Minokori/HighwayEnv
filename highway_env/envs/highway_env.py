@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 import numpy as np
 from gymnasium.spaces import Discrete
+
 from highway_env import utils
 from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
 from highway_env.envs.common.action import Action
@@ -33,20 +34,23 @@ class HighwayEnvConfig(EnvironmentConfig):
     offroad_terminal: bool
 
 
-class HighwayEnv(AbstractEnv):
+THighwayConfig = TypeVar("THighwayConfig", bound=HighwayEnvConfig)
+
+
+class HighwayEnv(AbstractEnv[HighwayEnvConfig], Generic[THighwayConfig]):
     """
     A highway driving environment.
 
     The vehicle is driving on a straight highway with several lanes, and is rewarded for reaching a high speed,
     staying on the rightmost lanes and avoiding collisions.
     """
+    config: THighwayConfig
     if TYPE_CHECKING:
-        config: HighwayEnvConfig
         action_space: Discrete
 
     @classmethod
-    def default_config(cls) -> HighwayEnvConfig:
-        config: HighwayEnvConfig = super().default_config()  # type: ignore
+    def default_config(cls) -> THighwayConfig:
+        config = super().default_config()
         config.update(
             {
                 "observation": {"type": "Kinematics"},
@@ -71,7 +75,7 @@ class HighwayEnv(AbstractEnv):
                 "offroad_terminal": False,
             }
         )
-        return config
+        return cast(THighwayConfig, config)
 
     def _reset(self) -> None:
         self._create_road()
@@ -169,7 +173,7 @@ class HighwayEnv(AbstractEnv):
         return self.time >= self.config["duration"]
 
 
-class HighwayEnvFast(HighwayEnv):
+class HighwayEnvFast(HighwayEnv[HighwayEnvConfig]):
     """
     A variant of highway-v0 with faster execution:
         - lower simulation frequency
@@ -178,7 +182,7 @@ class HighwayEnvFast(HighwayEnv):
     """
 
     @classmethod
-    def default_config(cls) -> HighwayEnvConfig:
+    def default_config(cls):
         cfg = super().default_config()
         cfg.update(
             {

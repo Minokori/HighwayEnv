@@ -1,34 +1,35 @@
 from __future__ import annotations
 
-from highway_env.vehicle.behavior import IDMVehicle
 import numpy as np
 
 from highway_env import utils
 from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
 from highway_env.road.lane import CircularLane, LineType, StraightLane
 from highway_env.road.road import Road, RoadNetwork
+from highway_env.typing import NewLaneIndex
+from highway_env.vehicle.behavior import IDMVehicle
 from highway_env.vehicle.controller import MDPVehicle
 
 
-
 class UTurnConfig(EnvironmentConfig):
-    duration:int
-    collision_reward:float
-    left_lane_reward:float
-    high_speed_reward:float
-    reward_speed_range:list[float]
-    normalize_reward:bool
-    offroad_terminal:bool
+    duration: int
+    collision_reward: float
+    left_lane_reward: float
+    high_speed_reward: float
+    reward_speed_range: list[float]
+    normalize_reward: bool
+    offroad_terminal: bool
 
-class UTurnEnv(AbstractEnv):
+
+class UTurnEnv(AbstractEnv[UTurnConfig]):
     """
     U-Turn risk analysis task: the agent overtakes vehicles that are blocking the
     traffic. High speed overtaking must be balanced with ensuring safety.
     """
 
     @classmethod
-    def default_config(cls) -> UTurnConfig:
-        config:UTurnConfig = super().default_config() # type: ignore
+    def default_config(cls):
+        config: UTurnConfig = super().default_config()
         config.update(
             {
                 "observation": {"type": "TimeToCollision", "horizon": 16},
@@ -70,7 +71,7 @@ class UTurnEnv(AbstractEnv):
 
     def _rewards(self, action: int) -> dict[str, float]:
         neighbours = self.road.network.all_side_lanes(self.vehicle.lane_index)
-        lane:int = self.vehicle.lane_index[2]  # type: ignore
+        lane: int = self.vehicle.lane_index[2]
         scaled_speed = utils.lmap(
             self.vehicle.speed, np.array(self.config["reward_speed_range"]), np.array([0, 1])
         )
@@ -195,13 +196,13 @@ class UTurnEnv(AbstractEnv):
         position_deviation = 2.0
         speed_deviation = 2.0
 
-        ego_lane = self.road.network.get_lane(("a", "b", 0))
+        ego_lane = self.road.network.get_lane(NewLaneIndex("a", "b", 0))
         ego_vehicle: MDPVehicle = self.action_type.vehicle_class(
             self.road, ego_lane.position(0, 0), speed=16.0
-        ) # type: ignore
+        )  # type: ignore
         # Stronger anticipation for the turn
-        # BUG any other where use this field(PURSUIT_TAU)?
-        ego_vehicle.PURSUIT_TAU = MDPVehicle.TAU_HEADING # type: ignore
+        # BUG @minokori any other where use this field(PURSUIT_TAU)?
+        ego_vehicle.PURSUIT_TAU = MDPVehicle.TAU_HEADING  # type: ignore
         try:
             ego_vehicle.plan_route_to("d")
         except AttributeError:
@@ -210,73 +211,73 @@ class UTurnEnv(AbstractEnv):
         self.road.vehicles.append(ego_vehicle)
         self.vehicle = ego_vehicle
 
-        vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
+        vehicles_type: type[IDMVehicle] = utils.class_from_path(self.config["other_vehicles_type"])
 
         # Note: randomize_behavior() can be commented out if more randomized
         # vehicle interactions are deemed necessary for the experimentation.
 
         # Vehicle 1: Blocking the ego vehicle
-        vehicle:IDMVehicle = vehicles_type.make_on_lane(
+        vehicle: IDMVehicle = vehicles_type.make_on_lane(
             self.road,
-            ("a", "b", 0),
+            NewLaneIndex("a", "b", 0),
             longitudinal=25.0 + self.np_random.normal() * position_deviation,
             speed=13.5 + self.np_random.normal() * speed_deviation,
-        ) # type: ignore
+        )  # type: ignore
         vehicle.plan_route_to("d")
         vehicle.randomize_behavior()
         self.road.vehicles.append(vehicle)
 
         # Vehicle 2: Forcing risky overtake
-        vehicle:IDMVehicle = vehicles_type.make_on_lane(
+        vehicle: IDMVehicle = vehicles_type.make_on_lane(
             self.road,
-            ("a", "b", 1),
+            NewLaneIndex("a", "b", 1),
             longitudinal=56.0 + self.np_random.normal() * position_deviation,
             speed=14.5 + self.np_random.normal() * speed_deviation,
-        ) # type: ignore
+        )  # type: ignore
         vehicle.plan_route_to("d")
         # vehicle.randomize_behavior()
         self.road.vehicles.append(vehicle)
 
         # Vehicle 3: Blocking the ego vehicle
-        vehicle:IDMVehicle = vehicles_type.make_on_lane(
+        vehicle: IDMVehicle = vehicles_type.make_on_lane(
             self.road,
-            ("b", "c", 1),
+            NewLaneIndex("b", "c", 1),
             longitudinal=0.5 + self.np_random.normal() * position_deviation,
             speed=4.5 + self.np_random.normal() * speed_deviation,
-        ) # type: ignore
+        )  # type: ignore
         vehicle.plan_route_to("d")
         # vehicle.randomize_behavior()
         self.road.vehicles.append(vehicle)
 
         # Vehicle 4: Forcing risky overtake
-        vehicle:IDMVehicle = vehicles_type.make_on_lane(
+        vehicle: IDMVehicle = vehicles_type.make_on_lane(
             self.road,
-            ("b", "c", 0),
+            NewLaneIndex("b", "c", 0),
             longitudinal=17.5 + self.np_random.normal() * position_deviation,
             speed=5.5 + self.np_random.normal() * speed_deviation,
-        ) # type: ignore
+        )  # type: ignore
         vehicle.plan_route_to("d")
         # vehicle.randomize_behavior()
         self.road.vehicles.append(vehicle)
 
         # Vehicle 5: Blocking the ego vehicle
-        vehicle:IDMVehicle = vehicles_type.make_on_lane(
+        vehicle: IDMVehicle = vehicles_type.make_on_lane(
             self.road,
-            ("c", "d", 0),
+            NewLaneIndex("c", "d", 0),
             longitudinal=1.0 + self.np_random.normal() * position_deviation,
             speed=3.5 + self.np_random.normal() * speed_deviation,
-        ) # type: ignore
+        )  # type: ignore
         vehicle.plan_route_to("d")
         # vehicle.randomize_behavior()
         self.road.vehicles.append(vehicle)
 
         # Vehicle 6: Forcing risky overtake
-        vehicle:IDMVehicle = vehicles_type.make_on_lane(
+        vehicle: IDMVehicle = vehicles_type.make_on_lane(
             self.road,
-            ("c", "d", 1),
+            NewLaneIndex("c", "d", 1),
             longitudinal=30.0 + self.np_random.normal() * position_deviation,
             speed=5.5 + self.np_random.normal() * speed_deviation,
-        ) # type: ignore
+        )  # type: ignore
         vehicle.plan_route_to("d")
         # vehicle.randomize_behavior()
         self.road.vehicles.append(vehicle)

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from highway_env.vehicle.behavior import IDMVehicle
 import numpy as np
 
 from highway_env import utils
 from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
 from highway_env.road.lane import LineType, StraightLane
 from highway_env.road.road import Road, RoadNetwork
+from highway_env.typing import NewLaneIndex
+from highway_env.vehicle.behavior import IDMVehicle
 
 
 class TwoWayEnvConfig(EnvironmentConfig):
@@ -15,7 +16,8 @@ class TwoWayEnvConfig(EnvironmentConfig):
     left_lane_reward: float
     high_speed_reward: float
 
-class TwoWayEnv(AbstractEnv):
+
+class TwoWayEnv(AbstractEnv[TwoWayEnvConfig]):
     """
     A risk management task: the agent is driving on a two-way lane with icoming traffic.
 
@@ -26,8 +28,8 @@ class TwoWayEnv(AbstractEnv):
     """
 
     @classmethod
-    def default_config(cls) -> TwoWayEnvConfig:
-        config: TwoWayEnvConfig = super().default_config() # type: ignore
+    def default_config(cls):
+        config = super().default_config()
         config.update(
             {
                 "observation": {"type": "TimeToCollision", "horizon": 5},
@@ -60,7 +62,7 @@ class TwoWayEnv(AbstractEnv):
             / (self.vehicle.target_speeds.size - 1),
             "left_lane_reward": (
                 len(neighbours) - 1 - self.vehicle.target_lane_index[2]
-            ) # type: ignore
+            )  # type: ignore
             / (len(neighbours) - 1),
         }
 
@@ -125,20 +127,20 @@ class TwoWayEnv(AbstractEnv):
         """
         road = self.road
         ego_vehicle = self.action_type.vehicle_class(
-            road, road.network.get_lane(("a", "b", 1)).position(30.0, 0.0), speed=30.0
+            road, road.network.get_lane(NewLaneIndex("a", "b", 1)).position(30.0, 0.0), speed=30.0
         )
         road.vehicles.append(ego_vehicle)
-        self.vehicle = ego_vehicle # type: ignore
+        self.vehicle = ego_vehicle  # type: ignore
 
-        vehicles_type:type[IDMVehicle] = utils.class_from_path(self.config["other_vehicles_type"]) # type: ignore
+        vehicles_type: type[IDMVehicle] = utils.class_from_path(self.config["other_vehicles_type"])  # type: ignore
         for i in range(3):
             self.road.vehicles.append(
                 vehicles_type(
                     road,
-                    position=road.network.get_lane(("a", "b", 1)).position(
+                    position=road.network.get_lane(NewLaneIndex("a", "b", 1)).position(
                         70.0 + 40.0 * float(i) + 10.0 * self.np_random.normal(), 0.00
                     ),
-                    heading=road.network.get_lane(("a", "b", 1)).heading_at(
+                    heading=road.network.get_lane(NewLaneIndex("a", "b", 1)).heading_at(
                         70.0 + 40.0 * float(i)
                     ),
                     speed=24.0 + 2.0 * self.np_random.normal(),
@@ -148,14 +150,14 @@ class TwoWayEnv(AbstractEnv):
         for i in range(2):
             v = vehicles_type(
                 road,
-                position=road.network.get_lane(("b", "a", 0)).position(
+                position=road.network.get_lane(NewLaneIndex("b", "a", 0)).position(
                     200.0 + 100.0 * float(i) + 10.0 * self.np_random.normal(), 0
                 ),
-                heading=road.network.get_lane(("b", "a", 0)).heading_at(
+                heading=road.network.get_lane(NewLaneIndex("b", "a", 0)).heading_at(
                     200.0 + 100.0 * float(i)
                 ),
                 speed=20.0 + 5.0 * self.np_random.normal(),
                 enable_lane_change=False,
             )
-            v.target_lane_index = ("b", "a", 0)
+            v.target_lane_index = NewLaneIndex("b", "a", 0)
             self.road.vehicles.append(v)

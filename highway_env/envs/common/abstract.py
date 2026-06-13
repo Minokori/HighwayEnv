@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import os
-from typing import NotRequired, TypedDict, TypeVar
+from typing import Generic, Literal, NotRequired, Self, TypedDict, TypeVar, cast
 
 import gymnasium as gym
 import numpy as np
@@ -16,6 +16,7 @@ from highway_env.envs.common.finite_mdp import finite_mdp
 from highway_env.envs.common.graphics import EnvViewer
 from highway_env.envs.common.observation import ObservationType, observation_factory
 from highway_env.road.road import Road
+from highway_env.typing import NewLaneIndex
 from highway_env.vehicle.behavior import IDMVehicle
 from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.kinematics import Vehicle
@@ -23,7 +24,7 @@ from highway_env.vehicle.kinematics import Vehicle
 
 Observation = TypeVar("Observation")
 
-
+# TODO use dataclass instead of TypedDict
 class EnvironmentConfig(TypedDict, total=False):
     observation: dict
     action: dict
@@ -45,6 +46,11 @@ class EnvironmentConfig(TypedDict, total=False):
     manual_control: bool
     real_time_rendering: bool
 
+    # for ui
+
+
+TConfig = TypeVar("TConfig", bound=EnvironmentConfig)
+
 
 class InformationDict(TypedDict):
     speed: float
@@ -53,9 +59,11 @@ class InformationDict(TypedDict):
     rewards: NotRequired[dict[str, float]]
     # TODO check  if these fields are optional
     is_success: NotRequired[bool]  # parking
+    agents_rewards: NotRequired[tuple[float,...]]  # intersection envs
+    agents_terminated: NotRequired[tuple[bool,...]]  # intersection envs
 
 
-class AbstractEnv(gym.Env):
+class AbstractEnv(gym.Env, Generic[TConfig]):
     """
     A generic environment for various tasks involving a vehicle driving on a road.
 
@@ -70,11 +78,12 @@ class AbstractEnv(gym.Env):
     metadata = {
         "render_modes": ["human", "rgb_array"],
     }
+    config: TConfig
 
     PERCEPTION_DISTANCE = 5.0 * Vehicle.MAX_SPEED
     """The maximum distance of any vehicle present in the observation [m]"""
 
-    def __init__(self, config: EnvironmentConfig | dict | None = None, render_mode: str | None = None) -> None:
+    def __init__(self, config: TConfig | dict | None = None, render_mode: Literal["human", "rgb_array"] | None = None) -> None:
         super().__init__()
 
         # Configuration
@@ -120,14 +129,14 @@ class AbstractEnv(gym.Env):
         self.controlled_vehicles = [vehicle]
 
     @classmethod
-    def default_config(cls) -> EnvironmentConfig:
+    def default_config(cls) -> TConfig:
         """
         Default environment configuration.
 
         Can be overloaded in environment implementations, or by calling configure().
         :return: a configuration dict
         """
-        return {
+        return cast(TConfig, {
             "observation": {"type": "Kinematics"},
             "action": {"type": "DiscreteMetaAction"},
             "simulation_frequency": 15,  # [Hz]
@@ -142,7 +151,7 @@ class AbstractEnv(gym.Env):
             "offscreen_rendering": os.environ.get("OFFSCREEN_RENDERING", "0") == "1",
             "manual_control": False,
             "real_time_rendering": False,
-        }
+        })
 
     def configure(self, config: EnvironmentConfig | dict | None) -> None:
         if config:
@@ -410,24 +419,24 @@ class AbstractEnv(gym.Env):
                 vehicles[i] = vehicle_class.create_from(v)
         return env_copy
 
-    def set_preferred_lane(self, preferred_lane: int | None = None) -> AbstractEnv:
+    def set_preferred_lane(self, preferred_lane: int | None = None) -> Self:
         env_copy = copy.deepcopy(self)
         if preferred_lane:
             for v in env_copy.road.vehicles:
                 if isinstance(v, IDMVehicle):
-                    v.route = [(lane[0], lane[1], preferred_lane) for lane in v.route]
+                    v.route = [NewLaneIndex(lane[0], lane[1], preferred_lane) for lane in v.route]
                     # Vehicle with lane preference are also less cautious
                     v.LANE_CHANGE_MAX_BRAKING_IMPOSED = 1000
         return env_copy
 
-    def set_route_at_intersection(self, _to: int) -> AbstractEnv:
+    def set_route_at_intersection(self, _to: int) -> Self:
         env_copy = copy.deepcopy(self)
         for v in env_copy.road.vehicles:
             if isinstance(v, IDMVehicle):
                 v.set_route_at_intersection(_to)
         return env_copy
 
-    def set_vehicle_field(self, args: tuple[str, object]) -> AbstractEnv:
+    def set_vehicle_field(self, args: tuple[str, object]) -> Self:
         field, value = args
         env_copy = copy.deepcopy(self)
         for v in env_copy.road.vehicles:
@@ -435,7 +444,7 @@ class AbstractEnv(gym.Env):
                 setattr(v, field, value)
         return env_copy
 
-    def call_vehicle_method(self, args: tuple[str, tuple[object]]) -> AbstractEnv:
+    def call_vehicle_method(self, args: tuple[str, tuple[object]]) -> Self:
         method, method_args = args
         env_copy = copy.deepcopy(self)
         for i, v in enumerate(env_copy.road.vehicles):
@@ -451,7 +460,7 @@ class AbstractEnv(gym.Env):
         return env_copy
 
     def to_finite_mdp(self):
-        return finite_mdp(self, time_quantization=1 / self.config["policy_frequency"])
+        return finite_mdp(self, time_quantization=1 / self.config["policy_frequency"])  # type: ignore
 
     def __deepcopy__(self, memo):
         """Perform a deep copy but without copying the environment viewer."""

@@ -69,6 +69,7 @@ Interval3D = Float[ndarray, "2 i j"]
 """An 3D ndarray, shape (2, m, n) representing m x n intervals [min_ij, max_ij]"""
 
 Interval = Interval1D | Interval2D | Interval3D
+"""A type representing an interval, which can be 1D (2,), 2D (2, n) or 3D (2, m, n)."""
 
 
 class ActionDict(TypedDict):
@@ -103,7 +104,6 @@ class Action:
 
 class LineType(enum.Enum):
     """A lane side line type."""
-
     NONE = 0
     STRIPED = 1
     CONTINUOUS = 2

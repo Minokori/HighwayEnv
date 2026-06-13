@@ -4,6 +4,7 @@ from typing import Self
 import numpy as np
 from torch import TYPE_CHECKING
 
+from highway_env.object.abc import RoadObject
 from highway_env.road.road import Road
 from highway_env.typing import ActionDict, NewLaneIndex, Position, Route, Vector
 from highway_env.utils import not_zero, wrap_to_pi
@@ -269,7 +270,7 @@ class MDPVehicle(ControlledVehicle):
     DEFAULT_TARGET_SPEEDS = np.linspace(20, 30, 3)
 
     if TYPE_CHECKING:
-        goal: Vector
+        goal: RoadObject
         """The goal of the vehicle, used in some observations to compute the desired heading and speed.
 
         This field only exists in `parking_env`

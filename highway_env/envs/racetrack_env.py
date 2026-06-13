@@ -1,17 +1,20 @@
 from __future__ import annotations
 
-from highway_env.vehicle.kinematics import Vehicle
+from typing import Generic, TypeVar, cast
+
 import numpy as np
 
 from highway_env import utils
 from highway_env.envs.common.abstract import AbstractEnv, EnvironmentConfig
+from highway_env.object import Obstacle
 from highway_env.road.lane import CircularLane, LineType, StraightLane
-from highway_env.road.road import LaneIndex, Road, RoadNetwork
+from highway_env.road.road import NewLaneIndex, Road, RoadNetwork
 from highway_env.vehicle.behavior import IDMVehicle
-from highway_env.object.a import Obstacle
+from highway_env.vehicle.kinematics import Vehicle
+
 
 class RacetrackEnvConfig(EnvironmentConfig):
-    duration:float
+    duration: float
     collision_reward: float
     lane_centering_cost: float
     lane_centering_reward: float
@@ -21,7 +24,11 @@ class RacetrackEnvConfig(EnvironmentConfig):
     speed_limit: float
     terminate_off_road: bool
 
-class RacetrackEnv(AbstractEnv):
+
+TRaceEnvConfig = TypeVar("TRaceEnvConfig", bound=RacetrackEnvConfig)
+
+
+class RacetrackEnv(AbstractEnv[RacetrackEnvConfig], Generic[TRaceEnvConfig]):
     """
     A continuous control environment.
 
@@ -33,10 +40,11 @@ class RacetrackEnv(AbstractEnv):
     initial implementation.
     See https://github.com/eleurent/highway-env/issues/231
     """
+    config: TRaceEnvConfig
 
     @classmethod
-    def default_config(cls) -> RacetrackEnvConfig:
-        config:RacetrackEnvConfig = super().default_config()  # type: ignore
+    def default_config(cls) -> TRaceEnvConfig:
+        config = super().default_config()
         config.update(
             {
                 "observation": {
@@ -69,7 +77,7 @@ class RacetrackEnv(AbstractEnv):
                 "terminate_off_road": True,
             }
         )
-        return config
+        return cast(TRaceEnvConfig, config)
 
     def _reward(self, action: np.ndarray) -> float:
         rewards = self._rewards(action)
@@ -107,7 +115,7 @@ class RacetrackEnv(AbstractEnv):
 
         # Set Speed Limits for Road Sections - Straight, Turn20, Straight,
         # Turn 15, Turn15, Straight, Turn25x2, Turn18
-        speedlimits:list[float] = [None, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]  # type: ignore
+        speedlimits: list[float] = [None, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]  # type: ignore
 
         # Initialise First Lane
         lane = StraightLane(
@@ -386,14 +394,14 @@ class RacetrackEnv(AbstractEnv):
         # Controlled vehicles
         self.controlled_vehicles = []
         for i in range(self.config["controlled_vehicles"]):
-            lane_index: LaneIndex = (
-                ("a", "b", int(rng.integers(2)))
+            lane_index = (
+                NewLaneIndex("a", "b", int(rng.integers(2)))
                 if i == 0
                 else self.road.network.random_lane_index(rng)
 
-          )
-            controlled_vehicle:Vehicle = self.action_type.vehicle_class.make_on_lane(
-                self.road, lane_index, speed=None, longitudinal=rng.uniform(20, 50) # type: ignore
+            )
+            controlled_vehicle: Vehicle = self.action_type.vehicle_class.make_on_lane(
+                self.road, lane_index, speed=None, longitudinal=rng.uniform(20, 50)
             )
 
             self.controlled_vehicles.append(controlled_vehicle)
@@ -401,11 +409,11 @@ class RacetrackEnv(AbstractEnv):
 
         if self.config["other_vehicles"] > 0:
             # Front vehicle
-            vehicle:IDMVehicle = IDMVehicle.make_on_lane(
+            vehicle: IDMVehicle = IDMVehicle.make_on_lane(
                 self.road,
-                ("b", "c", lane_index[-1]), # type: ignore
+                NewLaneIndex("b", "c", lane_index[-1]),
                 longitudinal=rng.uniform(
-                    low=0.0, high=self.road.network.get_lane(("b", "c", 0)).length
+                    low=0.0, high=self.road.network.get_lane(NewLaneIndex("b", "c", 0)).length
                 ),
                 speed=6.0 + rng.uniform(high=3.0),
             )
@@ -415,9 +423,9 @@ class RacetrackEnv(AbstractEnv):
             for i in range(rng.integers(self.config["other_vehicles"])):
                 rand_lane_index = self.road.network.random_lane_index(rng)
 
-                vehicle:IDMVehicle = IDMVehicle.make_on_lane(
+                vehicle: IDMVehicle = IDMVehicle.make_on_lane(
                     self.road,
-                    rand_lane_index, # type: ignore
+                    rand_lane_index,  # type: ignore
                     longitudinal=rng.uniform(
                         low=0.0, high=self.road.network.get_lane(rand_lane_index).length
                     ),
@@ -873,13 +881,15 @@ class RacetrackEnvLarge(RacetrackEnv):
             record_history=self.config["show_trajectories"],
         )
 
+
 class RacetrackEnvOvalConfig(RacetrackEnvConfig):
     length: int
     no_lanes: int
     block_lane: bool
     force_decision: bool
 
-class RacetrackEnvOval(RacetrackEnv):
+
+class RacetrackEnvOval(RacetrackEnv[RacetrackEnvOvalConfig]):
     """
     Oval-shaped racetrack with customizable parameters:
 
@@ -891,8 +901,8 @@ class RacetrackEnvOval(RacetrackEnv):
     credit: @christophluther
     """
     @classmethod
-    def default_config(cls) -> RacetrackEnvOvalConfig:
-        config: RacetrackEnvOvalConfig = super().default_config()  # type: ignore
+    def default_config(cls):
+        config = super().default_config()
         config.update(
             {
                 "observation": {
@@ -938,7 +948,7 @@ class RacetrackEnvOval(RacetrackEnv):
         rng = np.random.default_rng()
 
         # Set Speed Limits for Road Sections
-        speedlimits: list[float] = [None, 10, 10, 10, 10, 10, 10, 10, 10] # type: ignore
+        speedlimits: list[float] = [None, 10, 10, 10, 10, 10, 10, 10, 10]  # type: ignore
 
         # define length,
         if self.config["length"] == 0:
@@ -1322,12 +1332,12 @@ class RacetrackEnvOval(RacetrackEnv):
         # Scenario to force a "binary" decision
         if self.config["block_lane"]:
             for i in [40.0, 43.0, 46.0, 49.0]:
-                road.objects.append(Obstacle(road, [length - i, 3.75]))
-                road.objects.append(Obstacle(road, [length - i, 6.25]))
+                road.objects.append(Obstacle(road, np.array([length - i, 3.75])))
+                road.objects.append(Obstacle(road, np.array([length - i, 6.25])))
 
         if self.config["force_decision"]:
             for i in [-1.25, 1.25, 8.85, 11.25]:
-                road.objects.append(Obstacle(road, [length - 90.0, i]))
+                road.objects.append(Obstacle(road, np.array([length - 90.0, i])))
 
         self.road = road
 
@@ -1345,12 +1355,12 @@ class RacetrackEnvOval(RacetrackEnv):
 
         for i in range(self.config["controlled_vehicles"]):
             lane_index = (
-                ("a", "b", int(rng.integers(no_lanes)))
+                NewLaneIndex("a", "b", int(rng.integers(no_lanes)))
                 if i == 0
                 else self.road.network.random_lane_index(rng)
             )
-            controlled_vehicle:Vehicle = self.action_type.vehicle_class.make_on_lane(
-                self.road, lane_index, speed=None, longitudinal=rng.uniform(20.0, 50.0) # type: ignore
+            controlled_vehicle: Vehicle = self.action_type.vehicle_class.make_on_lane(
+                self.road, lane_index, speed=None, longitudinal=rng.uniform(20.0, 50.0)
             )
 
             self.controlled_vehicles.append(controlled_vehicle)
@@ -1358,11 +1368,11 @@ class RacetrackEnvOval(RacetrackEnv):
 
         if self.config["other_vehicles"] > 0:
             # Front vehicle
-            vehicle:IDMVehicle = IDMVehicle.make_on_lane(
+            vehicle: IDMVehicle = IDMVehicle.make_on_lane(
                 self.road,
-                ("b", "c", lane_index[-1]), # type: ignore
+                NewLaneIndex("b", "c", lane_index[-1]),
                 longitudinal=rng.uniform(
-                    low=0.0, high=self.road.network.get_lane(("b", "c", 0)).length
+                    low=0.0, high=self.road.network.get_lane(NewLaneIndex("b", "c", 0)).length
                 ),
                 speed=6.0 + rng.uniform(high=3.0),
             )
@@ -1371,9 +1381,9 @@ class RacetrackEnvOval(RacetrackEnv):
             # Other vehicles
             for i in range(rng.integers(self.config["other_vehicles"])):
                 rand_lane_index = self.road.network.random_lane_index(rng)
-                vehicle:IDMVehicle = IDMVehicle.make_on_lane(
+                vehicle: IDMVehicle = IDMVehicle.make_on_lane(
                     self.road,
-                    rand_lane_index, # type: ignore
+                    rand_lane_index,  # type: ignore
                     longitudinal=rng.uniform(
                         low=0.0, high=self.road.network.get_lane(rand_lane_index).length
                     ),

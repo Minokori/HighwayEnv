@@ -57,7 +57,7 @@ def finite_mdp(
 
     # @minokori only Discrete action space has field `n`
     # so we assume that the action space is Discrete
-    
+
     transition_model_with_grid = partial(transition_model, grid=grid)
     transition = np.fromfunction(
         transition_model_with_grid, grid.shape + (env.action_space.n,), dtype=int
